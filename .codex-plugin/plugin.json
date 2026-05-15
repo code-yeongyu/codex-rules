@@ -1,0 +1,34 @@
+{
+	"name": "codex-rules",
+	"version": "0.1.0",
+	"description": "Inject project rule files into Codex context through lifecycle hooks.",
+	"author": {
+		"name": "Yeongyu Kim",
+		"email": "yeongyu@users.noreply.github.com",
+		"url": "https://github.com/code-yeongyu"
+	},
+	"homepage": "https://github.com/code-yeongyu/codex-rules",
+	"repository": "https://github.com/code-yeongyu/codex-rules",
+	"license": "MIT",
+	"keywords": ["codex", "codex-plugin", "rules", "hooks", "agents-md", "context-injection", "typescript"],
+	"skills": "./skills/",
+	"hooks": "./hooks/hooks.json",
+	"interface": {
+		"displayName": "Codex Rules",
+		"shortDescription": "Injects local project rules into Codex",
+		"longDescription": "Codex Rules ports the pi-rules rule injector to Codex hooks. It loads AGENTS.md, CLAUDE.md, CONTEXT.md, .sisyphus/rules, .claude/rules, .cursor/rules, and GitHub instruction files, then injects matching static and file-specific guidance through SessionStart, UserPromptSubmit, and PostToolUse hook context.",
+		"developerName": "Yeongyu Kim",
+		"category": "Developer Tools",
+		"capabilities": ["Hooks", "Context Injection", "Developer Tools"],
+		"websiteURL": "https://github.com/code-yeongyu/codex-rules",
+		"privacyPolicyURL": "https://github.com/code-yeongyu/codex-rules#privacy",
+		"termsOfServiceURL": "https://github.com/code-yeongyu/codex-rules#license",
+		"defaultPrompt": [
+			"Show which project rules are being injected here.",
+			"Explain why this file matched project rules.",
+			"Disable Codex Rules for this session."
+		],
+		"brandColor": "#0F766E",
+		"screenshots": []
+	}
+}

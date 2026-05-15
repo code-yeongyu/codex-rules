@@ -1,0 +1,152 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+	type CodexPostToolUseInput,
+	type CodexSessionStartInput,
+	runPostToolUseHook,
+	runSessionStartHook,
+	runUserPromptSubmitHook,
+} from "../src/codex-hook.js";
+
+const tempDirectories: string[] = [];
+const PROJECT_ONLY_ENV = {
+	CODEX_RULES_ENABLED_SOURCES: "AGENTS.md,.sisyphus/rules",
+};
+
+afterEach(() => {
+	for (const directory of tempDirectories.splice(0)) {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+function makeTempProject(): { root: string; pluginData: string } {
+	const root = mkdtempSync(path.join(tmpdir(), "codex-rules-project-"));
+	const pluginData = mkdtempSync(path.join(tmpdir(), "codex-rules-data-"));
+	tempDirectories.push(root, pluginData);
+	writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "fixture" }));
+	writeFileSync(path.join(root, "AGENTS.md"), "Always wear safety goggles when refactoring.");
+	mkdirSync(path.join(root, ".sisyphus", "rules"), { recursive: true });
+	writeFileSync(
+		path.join(root, ".sisyphus", "rules", "typescript.md"),
+		[
+			"---",
+			"description: TypeScript",
+			'globs: ["**/*.ts", "**/*.tsx"]',
+			"---",
+			"",
+			"Prefer strict TypeScript for all source files.",
+		].join("\n"),
+	);
+	mkdirSync(path.join(root, "src"), { recursive: true });
+	writeFileSync(path.join(root, "src", "app.ts"), "export const app = true;\n");
+	return { root, pluginData };
+}
+
+function sessionStartInput(root: string): CodexSessionStartInput {
+	return {
+		session_id: "session-1",
+		transcript_path: null,
+		cwd: root,
+		hook_event_name: "SessionStart",
+		model: "gpt-5.5",
+		permission_mode: "default",
+		source: "startup",
+	};
+}
+
+function postToolUseInput(root: string, filePath: string): CodexPostToolUseInput {
+	return {
+		session_id: "session-1",
+		turn_id: "turn-1",
+		transcript_path: null,
+		cwd: root,
+		hook_event_name: "PostToolUse",
+		model: "gpt-5.5",
+		permission_mode: "default",
+		tool_name: "mcp__filesystem__read_file",
+		tool_input: { path: filePath },
+		tool_response: { text: "file contents" },
+		tool_use_id: "call-1",
+	};
+}
+
+function parseHookOutput(output: string): {
+	hookSpecificOutput?: {
+		hookEventName?: string;
+		additionalContext?: string;
+	};
+} {
+	expect(output.trim().length).toBeGreaterThan(0);
+	return JSON.parse(output) as {
+		hookSpecificOutput?: {
+			hookEventName?: string;
+			additionalContext?: string;
+		};
+	};
+}
+
+describe("codex rules hooks", () => {
+	it("#given project rules #when SessionStart runs #then emits static additional context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+
+		// when
+		const output = await runSessionStartHook(sessionStartInput(root), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+
+		// then
+		const parsed = parseHookOutput(output);
+		expect(parsed.hookSpecificOutput?.hookEventName).toBe("SessionStart");
+		expect(parsed.hookSpecificOutput?.additionalContext).toContain("## Project Instructions");
+		expect(parsed.hookSpecificOutput?.additionalContext).toContain("Always wear safety goggles");
+	});
+
+	it("#given static context already injected #when UserPromptSubmit runs #then it emits no duplicate context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		await runSessionStartHook(sessionStartInput(root), { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// when
+		const output = await runUserPromptSubmitHook(
+			{
+				session_id: "session-1",
+				turn_id: "turn-1",
+				transcript_path: null,
+				cwd: root,
+				hook_event_name: "UserPromptSubmit",
+				model: "gpt-5.5",
+				permission_mode: "default",
+				prompt: "read src/app.ts",
+			},
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(output).toBe("");
+	});
+
+	it("#given read-file tool result #when PostToolUse runs #then emits matching dynamic rule context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+
+		// when
+		const output = await runPostToolUseHook(postToolUseInput(root, filePath), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+
+		// then
+		const parsed = parseHookOutput(output);
+		expect(parsed.hookSpecificOutput?.hookEventName).toBe("PostToolUse");
+		expect(parsed.hookSpecificOutput?.additionalContext).toContain(
+			"Additional project instructions matched for src/app.ts",
+		);
+		expect(parsed.hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+	});
+});
