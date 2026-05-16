@@ -142,12 +142,15 @@ describe("codex rules hooks", () => {
 		});
 
 		// then
+		// The literal "src/app.ts" pins POSIX separators and acts as the Windows
+		// regression line: prior versions emitted "src\\app.ts" on Windows.
 		const parsed = parseHookOutput(output);
 		expect(parsed.hookSpecificOutput?.hookEventName).toBe("PostToolUse");
 		expect(parsed.hookSpecificOutput?.additionalContext).toContain(
 			"Additional project instructions matched for src/app.ts",
 		);
 		expect(parsed.hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+		expect(parsed.hookSpecificOutput?.additionalContext ?? "").not.toContain("src\\app.ts");
 		expect(output).not.toContain("updatedMCPToolOutput");
 		expect(output).not.toContain("suppressOutput");
 		expect(output).not.toContain('"decision"');

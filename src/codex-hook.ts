@@ -157,5 +157,9 @@ function formatAdditionalContextOutput(eventName: HookEventName, additionalConte
 }
 
 function displayPath(cwd: string, filePath: string): string {
-	return isAbsolute(filePath) ? relative(cwd, filePath) : filePath;
+	const rel = isAbsolute(filePath) ? relative(cwd, filePath) : filePath;
+	// Normalize to POSIX separators so injected rule context renders the same
+	// path string on Linux/macOS and Windows (Codex feeds this verbatim into
+	// the model prompt, and the existing engine already emits POSIX paths).
+	return rel.replaceAll("\\", "/");
 }
