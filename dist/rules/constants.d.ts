@@ -46,11 +46,6 @@ export declare const DEFAULT_MAX_RESULT_CHARS = 40000;
  */
 export declare const TRUNCATION_NOTICE = "\n\n[Rule truncated. Read full rule: {path}]";
 /**
- * Built-in tool names whose results trigger dynamic rule injection.
- */
-export declare const TRACKED_BUILTIN_TOOLS: readonly string[];
-export declare const TRACKED_BUILTIN_TOOL_SET: ReadonlySet<string>;
-/**
  * Directories excluded by the recursive scanner regardless of glob settings.
  */
 export declare const SCANNER_EXCLUDED_DIRS: readonly string[];

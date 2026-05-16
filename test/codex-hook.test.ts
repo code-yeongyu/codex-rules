@@ -148,5 +148,93 @@ describe("codex rules hooks", () => {
 			"Additional project instructions matched for src/app.ts",
 		);
 		expect(parsed.hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+		expect(output).not.toContain("updatedMCPToolOutput");
+		expect(output).not.toContain("suppressOutput");
+		expect(output).not.toContain('"decision"');
+	});
+
+	it("#given dynamic context already injected #when PostToolUse repeats #then emits no duplicate context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const input = postToolUseInput(root, filePath);
+		await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// when
+		const output = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// then
+		expect(output).toBe("");
+	});
+
+	it("#given static-only mode #when PostToolUse runs #then emits no dynamic context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+
+		// when
+		const output = await runPostToolUseHook(postToolUseInput(root, filePath), {
+			pluginDataRoot: pluginData,
+			env: {
+				...PROJECT_ONLY_ENV,
+				CODEX_RULES_MODE: "static",
+			},
+		});
+
+		// then
+		expect(output).toBe("");
+	});
+
+	it("#given rules disabled #when PostToolUse runs #then emits no dynamic context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+
+		// when
+		const output = await runPostToolUseHook(postToolUseInput(root, filePath), {
+			pluginDataRoot: pluginData,
+			env: {
+				...PROJECT_ONLY_ENV,
+				CODEX_RULES_DISABLED: "true",
+			},
+		});
+
+		// then
+		expect(output).toBe("");
+	});
+
+	it("#given failed tool response #when PostToolUse runs #then emits no dynamic context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+
+		// when
+		const output = await runPostToolUseHook(
+			{
+				...postToolUseInput(root, filePath),
+				tool_response: { is_error: true },
+			},
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(output).toBe("");
+	});
+
+	it("#given tracked tool without path #when PostToolUse runs #then emits no dynamic context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+
+		// when
+		const output = await runPostToolUseHook(
+			{
+				...postToolUseInput(root, ""),
+				tool_input: {},
+			},
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(output).toBe("");
 	});
 });

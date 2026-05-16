@@ -5,8 +5,10 @@ Codex plugin that injects local project rule files into model context through li
 It ports the `pi-rules` rule injector to Codex:
 
 - `SessionStart` and `UserPromptSubmit` load static project instructions once per session.
-- `PostToolUse` watches file reads and edits, then injects matching file-specific rules.
+- `PostToolUse` watches supported file reads, edits, `apply_patch`, MCP filesystem payloads, and shell command file references, then injects matching file-specific rules as additional context.
 - Session-level deduplication prevents the same rule from being repeated after it has been injected.
+
+`PostToolUse` output is context-only: it emits `hookSpecificOutput.additionalContext` and does not rewrite tool output.
 
 ## Rule Sources
 
@@ -55,6 +57,7 @@ It also enables:
 ```toml
 [features]
 plugins = true
+plugin_hooks = true
 
 [plugins."codex-rules@code-yeongyu-codex-plugins"]
 enabled = true

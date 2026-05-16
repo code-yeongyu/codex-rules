@@ -8,11 +8,13 @@ export interface CodexPostToolUseLike {
 }
 
 const COMMAND_TOOL_NAMES = new Set(["bash", "shell_command", "exec_command"]);
-const PATCH_TOOL_NAMES = new Set(["apply_patch"]);
 const TRACKED_TOOL_NAMES = new Set([
 	"read",
 	"read_file",
 	"mcp__filesystem__read_file",
+	"mcp__filesystem__read_multiple_files",
+	"mcp__filesystem__write_file",
+	"mcp__filesystem__edit_file",
 	"write",
 	"edit",
 	"multiedit",
@@ -36,9 +38,6 @@ export function extractCodexToolPaths(input: CodexPostToolUseLike, cwd: string):
 	addPatchRecordPaths(paths, toolInput.files, cwd);
 	addPatchRecordPaths(paths, toolInput.changes, cwd);
 
-	if (PATCH_TOOL_NAMES.has(toolName)) {
-		addPatchPayloadPaths(paths, toolInput, cwd);
-	}
 	if (COMMAND_TOOL_NAMES.has(toolName)) {
 		const command = stringProperty(toolInput, "command") ?? stringProperty(toolInput, "cmd");
 		const workdir = stringProperty(toolInput, "workdir") ?? stringProperty(toolInput, "cwd");
