@@ -7,6 +7,7 @@
 - Remove redundant apply_patch path scanning and stale tracked-tool constants.
 - Use portable Codex hook interpolation and add package smoke coverage for hook entrypoints.
 - Cap recursive rule directory scans and run CI on Windows in addition to Ubuntu and macOS.
+- Replace the external glob matcher dependency with an internal matcher so clean Codex plugin installs run without `node_modules`.
 
 ## 0.1.0 - 2026-05-15
 

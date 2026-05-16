@@ -15,6 +15,7 @@ describe("plugin package metadata", () => {
 
 		// when
 		const bin = packageJson.bin as Record<string, unknown>;
+		const dependencies = packageJson.dependencies as Record<string, unknown> | undefined;
 		const hookConfig = hooksJson.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>>;
 		const pluginRoot = ["$", "{PLUGIN_ROOT}"].join("");
 		const commands = [
@@ -26,6 +27,7 @@ describe("plugin package metadata", () => {
 		// then
 		expect(packageJson.type).toBe("module");
 		expect(packageJson.packageManager).toBe("npm@11.12.1");
+		expect(dependencies ?? {}).toEqual({});
 		expect(bin["codex-rules"]).toBe("./dist/cli.js");
 		expect(pluginJson.hooks).toBe("./hooks/hooks.json");
 		expect(cliSource.startsWith("#!/usr/bin/env node")).toBe(true);

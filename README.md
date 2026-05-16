@@ -10,6 +10,8 @@ It ports the `pi-rules` rule injector to Codex:
 
 `PostToolUse` output is context-only: it emits `hookSpecificOutput.additionalContext` and does not rewrite tool output.
 
+The runtime has no npm production dependencies, so a clean Codex marketplace copy can run without a follow-up `npm install`.
+
 ## Rule Sources
 
 Project-level sources:
@@ -46,7 +48,7 @@ codex plugin marketplace add /Users/yeongyu/local-workspaces/codex-plugins
 node /Users/yeongyu/local-workspaces/codex-plugins/scripts/install-local.mjs /Users/yeongyu/local-workspaces/codex-plugins
 ```
 
-The local installer builds the plugin, copies a clean cache entry to:
+The local installer builds the plugin and copies a clean cache entry to:
 
 ```text
 ~/.codex/plugins/cache/code-yeongyu-codex-plugins/codex-rules/0.1.0
