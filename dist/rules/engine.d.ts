@@ -1,3 +1,4 @@
+import { type RuleDiscoveryCache } from "./finder.js";
 import type { LoadedRule, PiRulesConfig, RuleCandidate, RuleDiagnostic, SessionState } from "./types.js";
 export interface EngineDeps {
     findCandidates: (options: {
@@ -6,6 +7,7 @@ export interface EngineDeps {
         homeDir?: string;
         disabledSources?: ReadonlySet<string>;
         skipUserHome?: boolean;
+        cache?: RuleDiscoveryCache;
     }) => RuleCandidate[];
     readFile: (path: string) => string | null;
     findProjectRoot: (startPath: string) => string | null;

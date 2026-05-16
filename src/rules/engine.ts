@@ -15,11 +15,21 @@ import {
 	PROJECT_SINGLE_FILES,
 	SOURCE_PRIORITY,
 } from "./constants.js";
+import { createRuleDiscoveryCache, type RuleDiscoveryCache } from "./finder.js";
 import { formatDynamicBlock, formatStaticBlock } from "./formatter.js";
 import { hashContent, matchRule } from "./matcher.js";
 import { sortCandidates } from "./ordering.js";
 import { parseRule } from "./parser.js";
 import type { LoadedRule, MatchReason, PiRulesConfig, RuleCandidate, RuleDiagnostic, SessionState } from "./types.js";
+
+interface LoadedRuleContent {
+	frontmatter: LoadedRule["frontmatter"];
+	body: string;
+	contentHash: string;
+	diagnostic?: string;
+}
+
+type CandidateProjectMembership = Map<string, boolean>;
 
 export interface EngineDeps {
 	findCandidates: (options: {
@@ -28,6 +38,7 @@ export interface EngineDeps {
 		homeDir?: string;
 		disabledSources?: ReadonlySet<string>;
 		skipUserHome?: boolean;
+		cache?: RuleDiscoveryCache;
 	}) => RuleCandidate[];
 	readFile: (path: string) => string | null;
 	findProjectRoot: (startPath: string) => string | null;
@@ -94,14 +105,28 @@ export function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine {
 		const rules: LoadedRule[] = [];
 		const diagnostics: RuleDiagnostic[] = [];
 		const seenRules = new Set<string>();
+		const loadedRuleContent = new Map<string, LoadedRuleContent | null>();
+		const projectMembership = new Map<string, boolean>();
 		const disabledSources = disabledSourcesFor(config);
+		const discoveryCache = createRuleDiscoveryCache();
+		const cwdProjectRoot = deps.findProjectRoot(cwd);
 
-		for (const targetFile of targetPaths) {
-			const projectRoot = deps.findProjectRoot(targetFile);
-			const candidates = deps.findCandidates({ projectRoot, targetFile, disabledSources });
+		for (const targetFile of uniqueStrings(targetPaths)) {
+			const projectRoot =
+				cwdProjectRoot !== null && isSameOrChildPath(targetFile, cwdProjectRoot)
+					? cwdProjectRoot
+					: deps.findProjectRoot(targetFile);
+			const candidates = deps.findCandidates({ projectRoot, targetFile, disabledSources, cache: discoveryCache });
 
 			for (const candidate of sortCandidates(candidates)) {
-				const loadedRule = loadCandidate(candidate, deps, diagnostics, projectRoot);
+				const loadedRule = loadCandidate(
+					candidate,
+					deps,
+					diagnostics,
+					projectRoot,
+					loadedRuleContent,
+					projectMembership,
+				);
 				if (loadedRule === null) {
 					continue;
 				}
@@ -191,8 +216,10 @@ function loadCandidate(
 	deps: EngineDeps,
 	diagnostics: RuleDiagnostic[],
 	projectRoot: string | null,
+	loadedRuleContent?: Map<string, LoadedRuleContent | null>,
+	projectMembership?: CandidateProjectMembership,
 ): (LoadedRule & { matchReason: MatchReason }) | null {
-	if (!isCandidateWithinProject(candidate, projectRoot)) {
+	if (!isCandidateWithinProjectCached(candidate, projectRoot, projectMembership)) {
 		diagnostics.push({
 			severity: "warning",
 			source: candidate.path,
@@ -201,22 +228,48 @@ function loadCandidate(
 		return null;
 	}
 
+	const cachedContent = loadedRuleContent?.get(candidate.realPath);
+	if (cachedContent !== undefined) {
+		return loadedRuleFromContent(candidate, cachedContent, diagnostics);
+	}
+
 	const content = deps.readFile(candidate.path);
 	if (content === null) {
+		loadedRuleContent?.set(candidate.realPath, null);
 		diagnostics.push({ severity: "warning", source: candidate.path, message: "Unable to read rule file" });
 		return null;
 	}
 
 	const parsed = parseRule(content);
-	if (parsed.diagnostic !== undefined) {
-		diagnostics.push({ severity: "warning", source: candidate.path, message: parsed.diagnostic });
+	const loadedContent = {
+		frontmatter: parsed.frontmatter,
+		body: parsed.body,
+		contentHash: hashContent(parsed.body),
+		diagnostic: parsed.diagnostic,
+	} satisfies LoadedRuleContent;
+	loadedRuleContent?.set(candidate.realPath, loadedContent);
+	return loadedRuleFromContent(candidate, loadedContent, diagnostics);
+}
+
+function loadedRuleFromContent(
+	candidate: RuleCandidate,
+	content: LoadedRuleContent | null,
+	diagnostics: RuleDiagnostic[],
+): (LoadedRule & { matchReason: MatchReason }) | null {
+	if (content === null) {
+		diagnostics.push({ severity: "warning", source: candidate.path, message: "Unable to read rule file" });
+		return null;
+	}
+
+	if (content.diagnostic !== undefined) {
+		diagnostics.push({ severity: "warning", source: candidate.path, message: content.diagnostic });
 	}
 
 	return {
 		...candidate,
-		frontmatter: parsed.frontmatter,
-		body: parsed.body,
-		contentHash: hashContent(parsed.body),
+		frontmatter: content.frontmatter,
+		body: content.body,
+		contentHash: content.contentHash,
 		matchReason: { kind: "no-match" },
 	};
 }
@@ -238,12 +291,37 @@ function isCandidateWithinProject(candidate: RuleCandidate, projectRoot: string 
 	return relativeRealPath === "" || (!relativeRealPath.startsWith("..") && !isAbsolute(relativeRealPath));
 }
 
+function isCandidateWithinProjectCached(
+	candidate: RuleCandidate,
+	projectRoot: string | null,
+	projectMembership: CandidateProjectMembership | undefined,
+): boolean {
+	if (projectMembership === undefined) {
+		return isCandidateWithinProject(candidate, projectRoot);
+	}
+
+	const cacheKey = `${projectRoot ?? ""}\0${candidate.realPath}`;
+	const cached = projectMembership.get(cacheKey);
+	if (cached !== undefined) {
+		return cached;
+	}
+
+	const isWithinProject = isCandidateWithinProject(candidate, projectRoot);
+	projectMembership.set(cacheKey, isWithinProject);
+	return isWithinProject;
+}
+
 function realPathOrResolved(path: string): string {
 	try {
 		return realpathSync.native(path);
 	} catch {
 		return resolve(path);
 	}
+}
+
+function isSameOrChildPath(childPath: string, parentPath: string): boolean {
+	const childRelativePath = relative(parentPath, resolve(childPath));
+	return childRelativePath === "" || (!childRelativePath.startsWith("..") && !isAbsolute(childRelativePath));
 }
 
 function staticMatchReason(rule: LoadedRule): MatchReason | null {
@@ -334,4 +412,18 @@ function storeLastLoad(
 function emptyLoadResult(state: SessionState): { rules: LoadedRule[]; diagnostics: RuleDiagnostic[] } {
 	storeLastLoad(state, [], []);
 	return { rules: [], diagnostics: [] };
+}
+
+function uniqueStrings(values: ReadonlyArray<string>): string[] {
+	const uniqueValues: string[] = [];
+	const seenValues = new Set<string>();
+	for (const value of values) {
+		if (seenValues.has(value)) {
+			continue;
+		}
+
+		seenValues.add(value);
+		uniqueValues.push(value);
+	}
+	return uniqueValues;
 }

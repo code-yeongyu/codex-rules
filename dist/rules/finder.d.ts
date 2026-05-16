@@ -1,4 +1,13 @@
+import { scanRuleFiles } from "./scanner.js";
 import type { RuleCandidate } from "./types.js";
+interface SingleFileInfo {
+    path: string;
+    realPath: string;
+}
+export interface RuleDiscoveryCache {
+    scannedRuleFiles: Map<string, ReturnType<typeof scanRuleFiles>>;
+    singleFileInfo: Map<string, SingleFileInfo | null>;
+}
 export interface FinderOptions {
     /** Project root absolute path (use findProjectRoot to get this). */
     projectRoot: string | null;
@@ -10,6 +19,9 @@ export interface FinderOptions {
     disabledSources?: ReadonlySet<string>;
     /** Whether to skip user-home rules. Default: false. */
     skipUserHome?: boolean;
+    cache?: RuleDiscoveryCache;
 }
+export declare function createRuleDiscoveryCache(): RuleDiscoveryCache;
 export declare function findRuleCandidates(options: FinderOptions): RuleCandidate[];
+export {};
 //# sourceMappingURL=finder.d.ts.map

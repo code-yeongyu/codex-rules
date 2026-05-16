@@ -4,6 +4,9 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import { GLOBAL_DISTANCE, PROJECT_RULE_SUBDIRS, PROJECT_SINGLE_FILES, USER_HOME_RULE_SUBDIRS, USER_HOME_SINGLE_FILES, } from "./constants.js";
 import { UnsupportedRuleSourceError } from "./errors.js";
 import { scanRuleFiles } from "./scanner.js";
+export function createRuleDiscoveryCache() {
+    return { scannedRuleFiles: new Map(), singleFileInfo: new Map() };
+}
 export function findRuleCandidates(options) {
     const skipUserHome = options.skipUserHome ?? false;
     if (options.projectRoot === null && skipUserHome) {
@@ -13,14 +16,14 @@ export function findRuleCandidates(options) {
     const candidates = [];
     const homeDirectory = resolve(options.homeDir ?? homedir());
     if (options.projectRoot !== null) {
-        candidates.push(...findProjectCandidates(options.projectRoot, options.targetFile, disabledSources));
+        candidates.push(...findProjectCandidates(options.projectRoot, options.targetFile, disabledSources, options.cache));
     }
     if (!skipUserHome) {
-        candidates.push(...findUserHomeCandidates(homeDirectory, disabledSources));
+        candidates.push(...findUserHomeCandidates(homeDirectory, disabledSources, options.cache));
     }
     return candidates;
 }
-function findProjectCandidates(projectRoot, targetFile, disabledSources) {
+function findProjectCandidates(projectRoot, targetFile, disabledSources, cache) {
     const rootDirectory = resolve(projectRoot);
     const walkDirectories = getWalkDirectories(rootDirectory, targetFile);
     const candidates = [];
@@ -31,10 +34,10 @@ function findProjectCandidates(projectRoot, targetFile, disabledSources) {
                 continue;
             }
             const ruleDirectory = join(walkDirectory.directory, parentDirectory, subDirectory);
-            for (const scannedFile of scanRuleFiles({ rootDir: ruleDirectory })) {
+            for (const scannedFile of scanRuleFilesCached(ruleDirectory, cache)) {
                 candidates.push({
                     path: scannedFile.path,
-                    realPath: resolveRealPath(scannedFile.path),
+                    realPath: scannedFile.realPath,
                     source,
                     distance: targetFile === null ? 0 : walkDirectory.distance,
                     isGlobal: false,
@@ -51,12 +54,13 @@ function findProjectCandidates(projectRoot, targetFile, disabledSources) {
                 continue;
             }
             const filePath = join(walkDirectory.directory, ruleFile);
-            if (!isFile(filePath)) {
+            const fileInfo = singleFileInfoCached(filePath, cache);
+            if (fileInfo === null) {
                 continue;
             }
             candidates.push({
-                path: filePath,
-                realPath: resolveRealPath(filePath),
+                path: fileInfo.path,
+                realPath: fileInfo.realPath,
                 source,
                 distance: targetFile === null ? 0 : walkDirectory.distance,
                 isGlobal: false,
@@ -67,7 +71,7 @@ function findProjectCandidates(projectRoot, targetFile, disabledSources) {
     }
     return candidates;
 }
-function findUserHomeCandidates(homeDirectory, disabledSources) {
+function findUserHomeCandidates(homeDirectory, disabledSources, cache) {
     const candidates = [];
     for (const ruleSubdir of USER_HOME_RULE_SUBDIRS) {
         const source = toUserHomeRuleSource(ruleSubdir);
@@ -75,10 +79,10 @@ function findUserHomeCandidates(homeDirectory, disabledSources) {
             continue;
         }
         const ruleDirectory = join(homeDirectory, ruleSubdir);
-        for (const scannedFile of scanRuleFiles({ rootDir: ruleDirectory })) {
+        for (const scannedFile of scanRuleFilesCached(ruleDirectory, cache)) {
             candidates.push({
                 path: scannedFile.path,
-                realPath: resolveRealPath(scannedFile.path),
+                realPath: scannedFile.realPath,
                 source,
                 distance: GLOBAL_DISTANCE,
                 isGlobal: true,
@@ -93,12 +97,13 @@ function findUserHomeCandidates(homeDirectory, disabledSources) {
             continue;
         }
         const filePath = join(homeDirectory, ruleFile);
-        if (!isFile(filePath)) {
+        const fileInfo = singleFileInfoCached(filePath, cache);
+        if (fileInfo === null) {
             continue;
         }
         candidates.push({
-            path: filePath,
-            realPath: resolveRealPath(filePath),
+            path: fileInfo.path,
+            realPath: fileInfo.realPath,
             source,
             distance: GLOBAL_DISTANCE,
             isGlobal: true,
@@ -107,6 +112,30 @@ function findUserHomeCandidates(homeDirectory, disabledSources) {
         });
     }
     return candidates;
+}
+function scanRuleFilesCached(rootDir, cache) {
+    if (cache === undefined) {
+        return scanRuleFiles({ rootDir });
+    }
+    const cached = cache.scannedRuleFiles.get(rootDir);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const scannedFiles = scanRuleFiles({ rootDir });
+    cache.scannedRuleFiles.set(rootDir, scannedFiles);
+    return scannedFiles;
+}
+function singleFileInfoCached(filePath, cache) {
+    if (cache === undefined) {
+        return readSingleFileInfo(filePath);
+    }
+    const cached = cache.singleFileInfo.get(filePath);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const fileInfo = readSingleFileInfo(filePath);
+    cache.singleFileInfo.set(filePath, fileInfo);
+    return fileInfo;
 }
 function getWalkDirectories(projectRoot, targetFile) {
     if (targetFile === null) {
@@ -137,15 +166,18 @@ function isSameOrChildPath(childPath, parentPath) {
     const childRelativePath = relative(parentPath, childPath);
     return childRelativePath === "" || (!childRelativePath.startsWith("..") && !childRelativePath.startsWith("/"));
 }
-function isFile(filePath) {
+function readSingleFileInfo(filePath) {
     if (!existsSync(filePath)) {
-        return false;
+        return null;
     }
     try {
-        return statSync(filePath).isFile();
+        if (!statSync(filePath).isFile()) {
+            return null;
+        }
+        return { path: filePath, realPath: resolveRealPath(filePath) };
     }
     catch {
-        return false;
+        return null;
     }
 }
 function resolveRealPath(filePath) {

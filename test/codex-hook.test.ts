@@ -42,6 +42,7 @@ function makeTempProject(): { root: string; pluginData: string } {
 	);
 	mkdirSync(path.join(root, "src"), { recursive: true });
 	writeFileSync(path.join(root, "src", "app.ts"), "export const app = true;\n");
+	writeFileSync(path.join(root, "src", "other.ts"), "export const other = true;\n");
 	return { root, pluginData };
 }
 
@@ -86,6 +87,10 @@ function parseHookOutput(output: string): {
 			additionalContext?: string;
 		};
 	};
+}
+
+function occurrenceCount(value: string, search: string): number {
+	return value.split(search).length - 1;
 }
 
 describe("codex rules hooks", () => {
@@ -154,6 +159,34 @@ describe("codex rules hooks", () => {
 		expect(output).not.toContain("updatedMCPToolOutput");
 		expect(output).not.toContain("suppressOutput");
 		expect(output).not.toContain('"decision"');
+	});
+
+	it("#given multiple target paths matching one rule #when PostToolUse runs #then emits dynamic context once for the first target", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const firstFilePath = path.join(root, "src", "app.ts");
+		const secondFilePath = path.join(root, "src", "other.ts");
+
+		// when
+		const output = await runPostToolUseHook(
+			{
+				...postToolUseInput(root, firstFilePath),
+				tool_name: "mcp__filesystem__read_multiple_files",
+				tool_input: { paths: [firstFilePath, secondFilePath, firstFilePath] },
+			},
+			{
+				pluginDataRoot: pluginData,
+				env: PROJECT_ONLY_ENV,
+			},
+		);
+
+		// then
+		const parsed = parseHookOutput(output);
+		const additionalContext = parsed.hookSpecificOutput?.additionalContext ?? "";
+		expect(parsed.hookSpecificOutput?.hookEventName).toBe("PostToolUse");
+		expect(additionalContext).toContain("Additional project instructions matched for src/app.ts");
+		expect(additionalContext).not.toContain("src\\app.ts");
+		expect(occurrenceCount(additionalContext, "Prefer strict TypeScript")).toBe(1);
 	});
 
 	it("#given dynamic context already injected #when PostToolUse repeats #then emits no duplicate context", async () => {

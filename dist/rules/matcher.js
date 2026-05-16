@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+const compiledPatternSets = new Map();
 export function matchRule(input) {
     if (input.isSingleFile) {
         return { matched: true, reason: "single-file" };
@@ -10,16 +11,9 @@ export function matchRule(input) {
     if (patterns.length === 0) {
         return noMatch();
     }
-    const pathBases = [
-        normalizePath(input.pathBases.projectRelative),
-        input.pathBases.scopeRelative ? normalizePath(input.pathBases.scopeRelative) : undefined,
-        normalizePath(input.pathBases.basename),
-    ].filter((pathBase) => pathBase !== undefined);
-    const positivePatterns = patterns.filter((pattern) => !pattern.startsWith("!"));
-    const negativePatterns = patterns.filter((pattern) => pattern.startsWith("!"));
-    const negativeMatchers = negativePatterns.map((pattern) => createGlobMatcher(pattern.slice(1)));
-    for (const pattern of positivePatterns) {
-        const isMatch = createGlobMatcher(pattern);
+    const pathBases = normalizedPathBases(input.pathBases);
+    const { positivePatterns, negativeMatchers } = compiledPatternSetFor(patterns);
+    for (const { pattern, isMatch } of positivePatterns) {
         for (const pathBase of pathBases) {
             if (!isMatch(pathBase)) {
                 continue;
@@ -51,6 +45,36 @@ function normalizePatternList(patterns) {
 }
 function normalizePath(path) {
     return path.replaceAll("\\", "/");
+}
+function normalizedPathBases(pathBases) {
+    const normalizedBases = [normalizePath(pathBases.projectRelative)];
+    if (pathBases.scopeRelative !== undefined) {
+        normalizedBases.push(normalizePath(pathBases.scopeRelative));
+    }
+    normalizedBases.push(normalizePath(pathBases.basename));
+    return normalizedBases;
+}
+function compiledPatternSetFor(patterns) {
+    const cacheKey = JSON.stringify(patterns);
+    const cached = compiledPatternSets.get(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const compiled = compilePatternSet(patterns);
+    compiledPatternSets.set(cacheKey, compiled);
+    return compiled;
+}
+function compilePatternSet(patterns) {
+    const positivePatterns = [];
+    const negativeMatchers = [];
+    for (const pattern of patterns) {
+        if (pattern.startsWith("!")) {
+            negativeMatchers.push(createGlobMatcher(pattern.slice(1)));
+            continue;
+        }
+        positivePatterns.push({ pattern, isMatch: createGlobMatcher(pattern) });
+    }
+    return { positivePatterns, negativeMatchers };
 }
 function createGlobMatcher(pattern) {
     const expression = globToRegExp(normalizePath(pattern));
