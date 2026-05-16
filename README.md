@@ -83,6 +83,7 @@ For migration from `pi-rules`, equivalent `PI_RULES_*` variables are accepted as
 npm install
 npm test
 npm run check
+npm run typecheck
 npm pack --dry-run
 ```
 

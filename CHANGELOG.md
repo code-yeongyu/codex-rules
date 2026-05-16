@@ -5,6 +5,8 @@
 - Add `PostToolUse` matching for MCP filesystem write, edit, and multi-read payloads.
 - Harden dynamic hook coverage for additional-context JSON output, disabled/static modes, failed tool responses, and duplicate suppression.
 - Remove redundant apply_patch path scanning and stale tracked-tool constants.
+- Use portable Codex hook interpolation and add package smoke coverage for hook entrypoints.
+- Cap recursive rule directory scans and run CI on Windows in addition to Ubuntu and macOS.
 
 ## 0.1.0 - 2026-05-15
 

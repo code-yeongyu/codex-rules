@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { RULE_FILE_EXTENSIONS, SCANNER_EXCLUDED_DIRS } from "./constants.js";
+import { DEFAULT_MAX_SCAN_FILES, RULE_FILE_EXTENSIONS, SCANNER_EXCLUDED_DIRS } from "./constants.js";
 export function scanRuleFiles(options) {
     const rootPath = toAbsolutePath(options.rootDir);
     if (!existsSync(rootPath)) {
@@ -20,13 +20,23 @@ export function scanRuleFiles(options) {
     const visitedDirectories = new Set();
     const excludedDirs = new Set(options.excludedDirs ?? SCANNER_EXCLUDED_DIRS);
     const maxDepth = options.maxDepth ?? 10;
-    scanDirectory(rootPath, 0, maxDepth, excludedDirs, visitedDirectories, results);
+    const maxFiles = normalizeMaxFiles(options.maxFiles);
+    scanDirectory(rootPath, 0, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
     return results;
+}
+function normalizeMaxFiles(maxFiles) {
+    const value = maxFiles ?? DEFAULT_MAX_SCAN_FILES;
+    if (!Number.isFinite(value) || value < 0)
+        return DEFAULT_MAX_SCAN_FILES;
+    return Math.floor(value);
 }
 function toAbsolutePath(filePath) {
     return isAbsolute(filePath) ? filePath : resolve(filePath);
 }
-function scanDirectory(directoryPath, depth, maxDepth, excludedDirs, visitedDirectories, results) {
+function scanDirectory(directoryPath, depth, maxDepth, maxFiles, excludedDirs, visitedDirectories, results) {
+    if (results.length >= maxFiles) {
+        return;
+    }
     let realDirectoryPath;
     try {
         realDirectoryPath = realpathSync.native(directoryPath);
@@ -46,15 +56,18 @@ function scanDirectory(directoryPath, depth, maxDepth, excludedDirs, visitedDire
         return;
     }
     for (const entry of entries) {
+        if (results.length >= maxFiles) {
+            return;
+        }
         const entryPath = join(directoryPath, entry.name);
         if (entry.isDirectory()) {
             if (!excludedDirs.has(entry.name) && depth < maxDepth) {
-                scanDirectory(entryPath, depth + 1, maxDepth, excludedDirs, visitedDirectories, results);
+                scanDirectory(entryPath, depth + 1, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
             }
             continue;
         }
         if (entry.isSymbolicLink()) {
-            scanSymbolicLink(entryPath, entry.name, depth, maxDepth, excludedDirs, visitedDirectories, results);
+            scanSymbolicLink(entryPath, entry.name, depth, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
             continue;
         }
         if (entry.isFile() && isRuleFile(entry.name)) {
@@ -62,7 +75,10 @@ function scanDirectory(directoryPath, depth, maxDepth, excludedDirs, visitedDire
         }
     }
 }
-function scanSymbolicLink(linkPath, linkName, depth, maxDepth, excludedDirs, visitedDirectories, results) {
+function scanSymbolicLink(linkPath, linkName, depth, maxDepth, maxFiles, excludedDirs, visitedDirectories, results) {
+    if (results.length >= maxFiles) {
+        return;
+    }
     let targetStats;
     try {
         targetStats = statSync(linkPath);
@@ -72,7 +88,7 @@ function scanSymbolicLink(linkPath, linkName, depth, maxDepth, excludedDirs, vis
     }
     if (targetStats.isDirectory()) {
         if (!excludedDirs.has(linkName) && depth < maxDepth) {
-            scanDirectory(linkPath, depth + 1, maxDepth, excludedDirs, visitedDirectories, results);
+            scanDirectory(linkPath, depth + 1, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
         }
         return;
     }

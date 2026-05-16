@@ -3,6 +3,7 @@ export interface ScanOptions {
     excludedDirs?: ReadonlyArray<string>;
     /** Maximum recursion depth. Default: 10 */
     maxDepth?: number;
+    maxFiles?: number;
 }
 export interface ScannedFile {
     /** Absolute path as encountered (may be a symlink). */

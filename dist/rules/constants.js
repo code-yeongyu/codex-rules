@@ -68,6 +68,7 @@ export const GLOBAL_DISTANCE = 9999;
  * Per-rule body character cap (default).
  */
 export const DEFAULT_MAX_RULE_CHARS = 12000;
+export const DEFAULT_MAX_SCAN_FILES = 1000;
 /**
  * Total injected chars per tool result (default).
  */

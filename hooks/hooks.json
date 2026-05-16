@@ -5,7 +5,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "node \"$PLUGIN_ROOT/dist/cli.js\" hook session-start",
+						"command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook session-start",
 						"timeout": 10,
 						"statusMessage": "loading project rules"
 					}
@@ -17,7 +17,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "node \"$PLUGIN_ROOT/dist/cli.js\" hook user-prompt-submit",
+						"command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook user-prompt-submit",
 						"timeout": 10,
 						"statusMessage": "loading project rules"
 					}
@@ -30,7 +30,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "node \"$PLUGIN_ROOT/dist/cli.js\" hook post-tool-use",
+						"command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook post-tool-use",
 						"timeout": 10,
 						"statusMessage": "matching project rules"
 					}

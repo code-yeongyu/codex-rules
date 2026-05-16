@@ -1,13 +1,14 @@
 import { type Dirent, existsSync, lstatSync, readdirSync, realpathSync, type Stats, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
-import { RULE_FILE_EXTENSIONS, SCANNER_EXCLUDED_DIRS } from "./constants.js";
+import { DEFAULT_MAX_SCAN_FILES, RULE_FILE_EXTENSIONS, SCANNER_EXCLUDED_DIRS } from "./constants.js";
 
 export interface ScanOptions {
 	rootDir: string;
 	excludedDirs?: ReadonlyArray<string>;
 	/** Maximum recursion depth. Default: 10 */
 	maxDepth?: number;
+	maxFiles?: number;
 }
 
 export interface ScannedFile {
@@ -38,9 +39,16 @@ export function scanRuleFiles(options: ScanOptions): ScannedFile[] {
 	const visitedDirectories = new Set<string>();
 	const excludedDirs = new Set(options.excludedDirs ?? SCANNER_EXCLUDED_DIRS);
 	const maxDepth = options.maxDepth ?? 10;
+	const maxFiles = normalizeMaxFiles(options.maxFiles);
 
-	scanDirectory(rootPath, 0, maxDepth, excludedDirs, visitedDirectories, results);
+	scanDirectory(rootPath, 0, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
 	return results;
+}
+
+function normalizeMaxFiles(maxFiles: number | undefined): number {
+	const value = maxFiles ?? DEFAULT_MAX_SCAN_FILES;
+	if (!Number.isFinite(value) || value < 0) return DEFAULT_MAX_SCAN_FILES;
+	return Math.floor(value);
 }
 
 function toAbsolutePath(filePath: string): string {
@@ -51,10 +59,15 @@ function scanDirectory(
 	directoryPath: string,
 	depth: number,
 	maxDepth: number,
+	maxFiles: number,
 	excludedDirs: ReadonlySet<string>,
 	visitedDirectories: Set<string>,
 	results: ScannedFile[],
 ): void {
+	if (results.length >= maxFiles) {
+		return;
+	}
+
 	let realDirectoryPath: string;
 	try {
 		realDirectoryPath = realpathSync.native(directoryPath);
@@ -77,17 +90,21 @@ function scanDirectory(
 	}
 
 	for (const entry of entries) {
+		if (results.length >= maxFiles) {
+			return;
+		}
+
 		const entryPath = join(directoryPath, entry.name);
 
 		if (entry.isDirectory()) {
 			if (!excludedDirs.has(entry.name) && depth < maxDepth) {
-				scanDirectory(entryPath, depth + 1, maxDepth, excludedDirs, visitedDirectories, results);
+				scanDirectory(entryPath, depth + 1, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
 			}
 			continue;
 		}
 
 		if (entry.isSymbolicLink()) {
-			scanSymbolicLink(entryPath, entry.name, depth, maxDepth, excludedDirs, visitedDirectories, results);
+			scanSymbolicLink(entryPath, entry.name, depth, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
 			continue;
 		}
 
@@ -102,10 +119,15 @@ function scanSymbolicLink(
 	linkName: string,
 	depth: number,
 	maxDepth: number,
+	maxFiles: number,
 	excludedDirs: ReadonlySet<string>,
 	visitedDirectories: Set<string>,
 	results: ScannedFile[],
 ): void {
+	if (results.length >= maxFiles) {
+		return;
+	}
+
 	let targetStats: Stats;
 	try {
 		targetStats = statSync(linkPath);
@@ -115,7 +137,7 @@ function scanSymbolicLink(
 
 	if (targetStats.isDirectory()) {
 		if (!excludedDirs.has(linkName) && depth < maxDepth) {
-			scanDirectory(linkPath, depth + 1, maxDepth, excludedDirs, visitedDirectories, results);
+			scanDirectory(linkPath, depth + 1, maxDepth, maxFiles, excludedDirs, visitedDirectories, results);
 		}
 		return;
 	}
