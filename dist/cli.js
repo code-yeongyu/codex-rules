@@ -20,16 +20,62 @@ async function runHookCli(eventName) {
     const raw = await readStdin();
     if (raw.trim().length === 0)
         return;
-    const parsed = JSON.parse(raw);
+    const parsed = parseHookInput(raw);
+    if (!parsed)
+        return;
     const options = { pluginDataRoot: process.env.PLUGIN_DATA };
-    const output = eventName === "SessionStart"
+    const output = eventName === "SessionStart" && isCodexSessionStartInput(parsed)
         ? await runSessionStartHook(parsed, options)
-        : eventName === "UserPromptSubmit"
+        : eventName === "UserPromptSubmit" && isCodexUserPromptSubmitInput(parsed)
             ? await runUserPromptSubmitHook(parsed, options)
-            : await runPostToolUseHook(parsed, options);
+            : eventName === "PostToolUse" && isCodexPostToolUseInput(parsed)
+                ? await runPostToolUseHook(parsed, options)
+                : "";
     if (output.length > 0) {
         processStdout.write(output);
     }
+}
+function parseHookInput(raw) {
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed;
+    }
+    catch {
+        return undefined;
+    }
+}
+function isCodexSessionStartInput(value) {
+    return (isRecord(value) &&
+        value.hook_event_name === "SessionStart" &&
+        typeof value.session_id === "string" &&
+        typeof value.cwd === "string" &&
+        typeof value.model === "string" &&
+        typeof value.permission_mode === "string" &&
+        typeof value.source === "string");
+}
+function isCodexUserPromptSubmitInput(value) {
+    return (isRecord(value) &&
+        value.hook_event_name === "UserPromptSubmit" &&
+        typeof value.session_id === "string" &&
+        typeof value.turn_id === "string" &&
+        typeof value.cwd === "string" &&
+        typeof value.model === "string" &&
+        typeof value.permission_mode === "string" &&
+        typeof value.prompt === "string");
+}
+function isCodexPostToolUseInput(value) {
+    return (isRecord(value) &&
+        value.hook_event_name === "PostToolUse" &&
+        typeof value.session_id === "string" &&
+        typeof value.turn_id === "string" &&
+        typeof value.cwd === "string" &&
+        typeof value.model === "string" &&
+        typeof value.permission_mode === "string" &&
+        typeof value.tool_name === "string" &&
+        typeof value.tool_use_id === "string");
+}
+function isRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function readStdin() {
     return new Promise((resolve, reject) => {

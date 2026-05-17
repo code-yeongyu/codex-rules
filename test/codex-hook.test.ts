@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +11,39 @@ import {
 	runSessionStartHook,
 	runUserPromptSubmitHook,
 } from "../src/codex-hook.js";
+
+type CliResult = {
+	exitCode: number | null;
+	stdout: string;
+	stderr: string;
+};
+
+function runHookCli(input: string): Promise<CliResult> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(
+			process.execPath,
+			[new URL("../dist/cli.js", import.meta.url).pathname, "hook", "post-tool-use"],
+			{
+				stdio: ["pipe", "pipe", "pipe"],
+			},
+		);
+		let stdout = "";
+		let stderr = "";
+		child.stdout.setEncoding("utf8");
+		child.stderr.setEncoding("utf8");
+		child.stdout.on("data", (chunk: string) => {
+			stdout += chunk;
+		});
+		child.stderr.on("data", (chunk: string) => {
+			stderr += chunk;
+		});
+		child.once("error", reject);
+		child.once("close", (exitCode) => {
+			resolve({ exitCode, stdout, stderr });
+		});
+		child.stdin.end(input);
+	});
+}
 
 const tempDirectories: string[] = [];
 const PROJECT_ONLY_ENV = {
@@ -272,5 +306,35 @@ describe("codex rules hooks", () => {
 
 		// then
 		expect(output).toBe("");
+	});
+
+	it("#given malformed post-tool-use stdin #when hook CLI runs #then it no-ops without stderr", async () => {
+		// given
+		const input = "break;\n";
+
+		// when
+		const result = await runHookCli(input);
+
+		// then
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: "",
+			stderr: "",
+		});
+	});
+
+	it("#given non-object post-tool-use JSON #when hook CLI runs #then it no-ops without stderr", async () => {
+		// given
+		const input = "[]\n";
+
+		// when
+		const result = await runHookCli(input);
+
+		// then
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: "",
+			stderr: "",
+		});
 	});
 });
