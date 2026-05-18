@@ -15,4 +15,3 @@ export declare function truncateBudget(input: {
     maxResultChars: number;
 }): BudgetResult[];
 export {};
-//# sourceMappingURL=truncator.d.ts.map

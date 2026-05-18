@@ -6,4 +6,3 @@
  * aliases that are normalized into `globs` internally.
  */
 export {};
-//# sourceMappingURL=types.js.map

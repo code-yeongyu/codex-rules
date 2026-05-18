@@ -4,4 +4,3 @@ export interface CodexPostToolUseLike {
     tool_response: unknown;
 }
 export declare function extractCodexToolPaths(input: CodexPostToolUseLike, cwd: string): string[];
-//# sourceMappingURL=tool-paths.d.ts.map

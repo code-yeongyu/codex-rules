@@ -11,14 +11,16 @@ function matchFrontmatter(
 		basename?: string;
 	},
 ): ReturnType<typeof matchRule> {
+	const scopeRelative = pathBases.scopeRelative;
+	const pathBase = {
+		projectRelative: pathBases.projectRelative,
+		basename: pathBases.basename ?? pathBases.projectRelative.split("/").at(-1) ?? pathBases.projectRelative,
+		...(scopeRelative === undefined ? {} : { scopeRelative }),
+	};
 	return matchRule({
 		frontmatter,
 		isSingleFile: false,
-		pathBases: {
-			projectRelative: pathBases.projectRelative,
-			scopeRelative: pathBases.scopeRelative,
-			basename: pathBases.basename ?? pathBases.projectRelative.split("/").at(-1) ?? pathBases.projectRelative,
-		},
+		pathBases: pathBase,
 	});
 }
 

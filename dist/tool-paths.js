@@ -26,8 +26,8 @@ export function extractCodexToolPaths(input, cwd) {
     const toolInput = isRecord(input.tool_input) ? input.tool_input : {};
     addCommonPathFields(paths, toolInput, cwd);
     addPatchPayloadPaths(paths, toolInput, cwd);
-    addPatchRecordPaths(paths, toolInput.files, cwd);
-    addPatchRecordPaths(paths, toolInput.changes, cwd);
+    addPatchRecordPaths(paths, toolInput["files"], cwd);
+    addPatchRecordPaths(paths, toolInput["changes"], cwd);
     if (COMMAND_TOOL_NAMES.has(toolName)) {
         const command = stringProperty(toolInput, "command") ?? stringProperty(toolInput, "cmd");
         const workdir = stringProperty(toolInput, "workdir") ?? stringProperty(toolInput, "cwd");
@@ -164,6 +164,5 @@ function isRecord(value) {
 function isFailedToolResponse(value) {
     if (!isRecord(value))
         return false;
-    return value.isError === true || value.is_error === true || value.error === true || value.status === "error";
+    return (value["isError"] === true || value["is_error"] === true || value["error"] === true || value["status"] === "error");
 }
-//# sourceMappingURL=tool-paths.js.map

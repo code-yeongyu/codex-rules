@@ -49,4 +49,3 @@ export function clearSession(state) {
     state.loadedRules.length = 0;
     state.diagnostics.length = 0;
 }
-//# sourceMappingURL=cache.js.map

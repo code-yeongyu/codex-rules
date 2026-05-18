@@ -16,4 +16,3 @@ export interface MatchResult {
 export declare function matchRule(input: MatcherInput): MatchResult;
 export declare function normalizeGlobs(frontmatter: RuleFrontmatter): string[];
 export declare function hashContent(body: string): string;
-//# sourceMappingURL=matcher.d.ts.map

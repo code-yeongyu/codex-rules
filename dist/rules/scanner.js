@@ -109,4 +109,3 @@ function resolveRealPath(filePath) {
         return filePath;
     }
 }
-//# sourceMappingURL=scanner.js.map

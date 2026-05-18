@@ -27,11 +27,15 @@ export function createEngine(config, deps) {
             return emptyLoadResult(state);
         }
         const projectRoot = deps.findProjectRoot(cwd);
-        const candidates = deps.findCandidates({
+        const findOptions = {
             projectRoot,
             targetFile: null,
-            disabledSources: disabledSourcesFor(config),
-        });
+        };
+        const disabledSources = disabledSourcesFor(config);
+        if (disabledSources !== undefined) {
+            findOptions.disabledSources = disabledSources;
+        }
+        const candidates = deps.findCandidates(findOptions);
         const result = loadStaticCandidates(candidates, deps, projectRoot);
         storeLastLoad(state, result.rules, result.diagnostics);
         return result;
@@ -53,7 +57,15 @@ export function createEngine(config, deps) {
             const projectRoot = cwdProjectRoot !== null && isSameOrChildPath(targetFile, cwdProjectRoot)
                 ? cwdProjectRoot
                 : deps.findProjectRoot(targetFile);
-            const candidates = deps.findCandidates({ projectRoot, targetFile, disabledSources, cache: discoveryCache });
+            const findOptions = {
+                projectRoot,
+                targetFile,
+                cache: discoveryCache,
+            };
+            if (disabledSources !== undefined) {
+                findOptions.disabledSources = disabledSources;
+            }
+            const candidates = deps.findCandidates(findOptions);
             for (const candidate of sortCandidates(candidates)) {
                 const loadedRule = loadCandidate(candidate, deps, diagnostics, projectRoot, loadedRuleContent, projectMembership);
                 if (loadedRule === null) {
@@ -184,7 +196,7 @@ function loadCandidate(candidate, deps, diagnostics, projectRoot, loadedRuleCont
         frontmatter: parsed.frontmatter,
         body: parsed.body,
         contentHash: hashContent(content),
-        diagnostic: parsed.diagnostic,
+        ...(parsed.diagnostic === undefined ? {} : { diagnostic: parsed.diagnostic }),
     };
     loadedRuleContent?.set(candidate.realPath, loadedContent);
     return loadedRuleFromContent(candidate, loadedContent, diagnostics);
@@ -320,4 +332,3 @@ function uniqueStrings(values) {
     }
     return uniqueValues;
 }
-//# sourceMappingURL=engine.js.map

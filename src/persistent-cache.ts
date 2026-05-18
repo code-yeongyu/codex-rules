@@ -45,7 +45,7 @@ export function clearSessionState(cachePath: string): void {
 }
 
 export function sessionCachePath(sessionId: string, pluginDataRoot: string | undefined): string {
-	const root = pluginDataRoot ?? process.env.PLUGIN_DATA ?? join(homedir(), ".codex", "codex-rules");
+	const root = pluginDataRoot ?? process.env["PLUGIN_DATA"] ?? join(homedir(), ".codex", "codex-rules");
 	return join(root, "sessions", `${safePathSegment(sessionId)}.json`);
 }
 
@@ -73,13 +73,15 @@ function safePathSegment(value: string): string {
 }
 
 function isSerializedSessionState(value: unknown): value is SerializedSessionState {
-	if (!isRecord(value) || !Array.isArray(value.staticDedup) || !isRecord(value.dynamicDedup)) {
+	if (!isRecord(value) || !Array.isArray(value["staticDedup"]) || !isRecord(value["dynamicDedup"])) {
 		return false;
 	}
-	const dynamicTargetFingerprints = value.dynamicTargetFingerprints;
+	const staticDedup = value["staticDedup"];
+	const dynamicDedup = value["dynamicDedup"];
+	const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
 	return (
-		value.staticDedup.every((item) => typeof item === "string") &&
-		Object.values(value.dynamicDedup).every(
+		staticDedup.every((item) => typeof item === "string") &&
+		Object.values(dynamicDedup).every(
 			(item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string"),
 		) &&
 		(dynamicTargetFingerprints === undefined ||

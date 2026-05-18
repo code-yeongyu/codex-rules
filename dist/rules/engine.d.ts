@@ -35,4 +35,3 @@ export interface Engine {
 }
 export declare function defaultConfig(): PiRulesConfig;
 export declare function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine;
-//# sourceMappingURL=engine.d.ts.map

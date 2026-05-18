@@ -55,4 +55,3 @@ function parseEnabledSources(value) {
     }
     return sources.length > 0 ? sources : "auto";
 }
-//# sourceMappingURL=config.js.map

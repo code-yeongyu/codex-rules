@@ -31,7 +31,7 @@ export function clearSessionState(cachePath) {
     rmSync(cachePath, { force: true });
 }
 export function sessionCachePath(sessionId, pluginDataRoot) {
-    const root = pluginDataRoot ?? process.env.PLUGIN_DATA ?? join(homedir(), ".codex", "codex-rules");
+    const root = pluginDataRoot ?? process.env["PLUGIN_DATA"] ?? join(homedir(), ".codex", "codex-rules");
     return join(root, "sessions", `${safePathSegment(sessionId)}.json`);
 }
 function readSessionState(cachePath) {
@@ -56,12 +56,14 @@ function safePathSegment(value) {
     return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120) || "unknown-session";
 }
 function isSerializedSessionState(value) {
-    if (!isRecord(value) || !Array.isArray(value.staticDedup) || !isRecord(value.dynamicDedup)) {
+    if (!isRecord(value) || !Array.isArray(value["staticDedup"]) || !isRecord(value["dynamicDedup"])) {
         return false;
     }
-    const dynamicTargetFingerprints = value.dynamicTargetFingerprints;
-    return (value.staticDedup.every((item) => typeof item === "string") &&
-        Object.values(value.dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")) &&
+    const staticDedup = value["staticDedup"];
+    const dynamicDedup = value["dynamicDedup"];
+    const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
+    return (staticDedup.every((item) => typeof item === "string") &&
+        Object.values(dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")) &&
         (dynamicTargetFingerprints === undefined ||
             (isRecord(dynamicTargetFingerprints) &&
                 Object.entries(dynamicTargetFingerprints).every(([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string"))));
@@ -69,4 +71,3 @@ function isSerializedSessionState(value) {
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-//# sourceMappingURL=persistent-cache.js.map

@@ -136,4 +136,3 @@ function isExcluded(pathBase, negativeMatchers) {
 function noMatch() {
     return { matched: false, reason: { kind: "no-match" } };
 }
-//# sourceMappingURL=matcher.js.map

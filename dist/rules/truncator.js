@@ -43,4 +43,3 @@ export function truncateBudget(input) {
     }
     return results;
 }
-//# sourceMappingURL=truncator.js.map

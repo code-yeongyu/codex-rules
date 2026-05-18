@@ -5,12 +5,19 @@
 		"rules": {
 			"recommended": true,
 			"style": {
-				"noNonNullAssertion": "off",
+				"noDefaultExport": "error",
+				"noEnum": "error",
+				"noNonNullAssertion": "error",
+				"useImportType": "error",
 				"useConst": "error",
 				"useNodejsImportProtocol": "off"
 			},
+			"complexity": {
+				"useLiteralKeys": "off"
+			},
 			"suspicious": {
 				"noExplicitAny": "error",
+				"noTsIgnore": "error",
 				"noControlCharactersInRegex": "off",
 				"noEmptyInterface": "off"
 			}
@@ -24,6 +31,18 @@
 		"lineWidth": 120
 	},
 	"files": {
-		"includes": ["src/**/*.ts", "test/**/*.ts", "!**/node_modules/**/*", "!**/dist/**/*"]
-	}
+		"includes": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "!**/node_modules/**/*", "!**/dist/**/*"]
+	},
+	"overrides": [
+		{
+			"includes": ["vitest.config.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noDefaultExport": "off"
+					}
+				}
+			}
+		}
+	]
 }

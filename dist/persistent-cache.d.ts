@@ -3,4 +3,3 @@ export declare function hydrateEngineState(engine: Engine, cachePath: string): v
 export declare function persistEngineState(engine: Engine, cachePath: string): void;
 export declare function clearSessionState(cachePath: string): void;
 export declare function sessionCachePath(sessionId: string, pluginDataRoot: string | undefined): string;
-//# sourceMappingURL=persistent-cache.d.ts.map

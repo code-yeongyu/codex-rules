@@ -12,4 +12,3 @@ export interface ScannedFile {
     realPath: string;
 }
 export declare function scanRuleFiles(options: ScanOptions): ScannedFile[];
-//# sourceMappingURL=scanner.d.ts.map

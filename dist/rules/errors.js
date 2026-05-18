@@ -10,4 +10,3 @@ export class RuleFrontmatterParseError extends Error {
         this.name = "RuleFrontmatterParseError";
     }
 }
-//# sourceMappingURL=errors.js.map

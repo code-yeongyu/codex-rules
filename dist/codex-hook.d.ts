@@ -47,4 +47,3 @@ export declare function runSessionStartHook(input: CodexSessionStartInput, optio
 export declare function runPostCompactHook(input: CodexPostCompactInput, options?: CodexRulesHookOptions): Promise<string>;
 export declare function runUserPromptSubmitHook(input: CodexUserPromptSubmitInput, options?: CodexRulesHookOptions): Promise<string>;
 export declare function runPostToolUseHook(input: CodexPostToolUseInput, options?: CodexRulesHookOptions): Promise<string>;
-//# sourceMappingURL=codex-hook.d.ts.map

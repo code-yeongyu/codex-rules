@@ -235,4 +235,3 @@ function toUserHomeSingleFileSource(ruleFile) {
             throw new UnsupportedRuleSourceError(`Unsupported user-home single-file source: ${source}`);
     }
 }
-//# sourceMappingURL=finder.js.map

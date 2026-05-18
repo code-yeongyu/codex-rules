@@ -26,7 +26,8 @@ async function runHookCli(eventName) {
     const parsed = parseHookInput(raw);
     if (!parsed)
         return;
-    const options = { pluginDataRoot: process.env.PLUGIN_DATA };
+    const pluginDataRoot = process.env["PLUGIN_DATA"];
+    const options = pluginDataRoot === undefined ? {} : { pluginDataRoot };
     const output = await runHook(eventName, parsed, options);
     if (output.length > 0) {
         processStdout.write(output);
@@ -55,46 +56,46 @@ function parseHookInput(raw) {
 }
 function isCodexSessionStartInput(value) {
     return (isRecord(value) &&
-        value.hook_event_name === "SessionStart" &&
-        typeof value.session_id === "string" &&
-        isStringOrNull(value.transcript_path) &&
-        typeof value.cwd === "string" &&
-        typeof value.model === "string" &&
-        typeof value.permission_mode === "string" &&
-        typeof value.source === "string");
+        value["hook_event_name"] === "SessionStart" &&
+        typeof value["session_id"] === "string" &&
+        isStringOrNull(value["transcript_path"]) &&
+        typeof value["cwd"] === "string" &&
+        typeof value["model"] === "string" &&
+        typeof value["permission_mode"] === "string" &&
+        typeof value["source"] === "string");
 }
 function isCodexUserPromptSubmitInput(value) {
     return (isRecord(value) &&
-        value.hook_event_name === "UserPromptSubmit" &&
-        typeof value.session_id === "string" &&
-        typeof value.turn_id === "string" &&
-        isStringOrNull(value.transcript_path) &&
-        typeof value.cwd === "string" &&
-        typeof value.model === "string" &&
-        typeof value.permission_mode === "string" &&
-        typeof value.prompt === "string");
+        value["hook_event_name"] === "UserPromptSubmit" &&
+        typeof value["session_id"] === "string" &&
+        typeof value["turn_id"] === "string" &&
+        isStringOrNull(value["transcript_path"]) &&
+        typeof value["cwd"] === "string" &&
+        typeof value["model"] === "string" &&
+        typeof value["permission_mode"] === "string" &&
+        typeof value["prompt"] === "string");
 }
 function isCodexPostToolUseInput(value) {
     return (isRecord(value) &&
-        value.hook_event_name === "PostToolUse" &&
-        typeof value.session_id === "string" &&
-        typeof value.turn_id === "string" &&
-        isStringOrNull(value.transcript_path) &&
-        typeof value.cwd === "string" &&
-        typeof value.model === "string" &&
-        typeof value.permission_mode === "string" &&
-        typeof value.tool_name === "string" &&
-        typeof value.tool_use_id === "string");
+        value["hook_event_name"] === "PostToolUse" &&
+        typeof value["session_id"] === "string" &&
+        typeof value["turn_id"] === "string" &&
+        isStringOrNull(value["transcript_path"]) &&
+        typeof value["cwd"] === "string" &&
+        typeof value["model"] === "string" &&
+        typeof value["permission_mode"] === "string" &&
+        typeof value["tool_name"] === "string" &&
+        typeof value["tool_use_id"] === "string");
 }
 function isCodexPostCompactInput(value) {
     return (isRecord(value) &&
-        value.hook_event_name === "PostCompact" &&
-        typeof value.session_id === "string" &&
-        typeof value.turn_id === "string" &&
-        isStringOrNull(value.transcript_path) &&
-        typeof value.cwd === "string" &&
-        typeof value.model === "string" &&
-        (value.trigger === "manual" || value.trigger === "auto"));
+        value["hook_event_name"] === "PostCompact" &&
+        typeof value["session_id"] === "string" &&
+        typeof value["turn_id"] === "string" &&
+        isStringOrNull(value["transcript_path"]) &&
+        typeof value["cwd"] === "string" &&
+        typeof value["model"] === "string" &&
+        (value["trigger"] === "manual" || value["trigger"] === "auto"));
 }
 function isStringOrNull(value) {
     return typeof value === "string" || value === null;
@@ -115,4 +116,3 @@ function readStdin() {
         });
     });
 }
-//# sourceMappingURL=cli.js.map

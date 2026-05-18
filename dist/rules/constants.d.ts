@@ -50,4 +50,3 @@ export declare const TRUNCATION_NOTICE = "\n\n[Rule truncated. Read full rule: {
  * Directories excluded by the recursive scanner regardless of glob settings.
  */
 export declare const SCANNER_EXCLUDED_DIRS: readonly string[];
-//# sourceMappingURL=constants.d.ts.map

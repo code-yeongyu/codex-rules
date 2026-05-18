@@ -206,12 +206,20 @@ function fingerprintDynamicTargets(
 			cwdProjectRoot !== null && isSameOrChildPath(targetPath, cwdProjectRoot)
 				? cwdProjectRoot
 				: findProjectRoot(targetPath);
-		const candidates = findRuleCandidates({
+		const findOptions: {
+			projectRoot: string | null;
+			targetFile: string;
+			disabledSources?: ReadonlySet<string>;
+			cache: ReturnType<typeof createRuleDiscoveryCache>;
+		} = {
 			projectRoot,
 			targetFile: targetPath,
-			disabledSources,
 			cache: discoveryCache,
-		});
+		};
+		if (disabledSources !== undefined) {
+			findOptions.disabledSources = disabledSources;
+		}
+		const candidates = findRuleCandidates(findOptions);
 		const candidateFingerprint = sortCandidates(candidates).map(fingerprintCandidate).join("\u0001");
 		const cacheKey = dynamicTargetCacheKey(targetPath);
 		fingerprints.push({

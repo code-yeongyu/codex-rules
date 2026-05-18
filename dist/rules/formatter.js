@@ -41,4 +41,3 @@ export function formatDynamicBlock(rules, targetRelativePath, options) {
         .map(formatRule)
         .join("\n\n")}`;
 }
-//# sourceMappingURL=formatter.js.map

@@ -21,4 +21,3 @@ export function findProjectRoot(startPath, markers = PROJECT_MARKERS) {
         currentDirectory = dirname(currentDirectory);
     }
 }
-//# sourceMappingURL=project-root.js.map

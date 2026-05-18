@@ -7,4 +7,3 @@ export declare function markDynamicInjected(state: SessionState, rule: LoadedRul
 export declare function isStaticInjected(state: SessionState, rule: LoadedRule): boolean;
 export declare function isDynamicInjected(state: SessionState, rule: LoadedRule): boolean;
 export declare function clearSession(state: SessionState): void;
-//# sourceMappingURL=cache.d.ts.map

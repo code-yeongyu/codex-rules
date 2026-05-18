@@ -88,11 +88,15 @@ export function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine {
 		}
 
 		const projectRoot = deps.findProjectRoot(cwd);
-		const candidates = deps.findCandidates({
+		const findOptions: Parameters<EngineDeps["findCandidates"]>[0] = {
 			projectRoot,
 			targetFile: null,
-			disabledSources: disabledSourcesFor(config),
-		});
+		};
+		const disabledSources = disabledSourcesFor(config);
+		if (disabledSources !== undefined) {
+			findOptions.disabledSources = disabledSources;
+		}
+		const candidates = deps.findCandidates(findOptions);
 		const result = loadStaticCandidates(candidates, deps, projectRoot);
 		storeLastLoad(state, result.rules, result.diagnostics);
 		return result;
@@ -121,7 +125,15 @@ export function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine {
 				cwdProjectRoot !== null && isSameOrChildPath(targetFile, cwdProjectRoot)
 					? cwdProjectRoot
 					: deps.findProjectRoot(targetFile);
-			const candidates = deps.findCandidates({ projectRoot, targetFile, disabledSources, cache: discoveryCache });
+			const findOptions: Parameters<EngineDeps["findCandidates"]>[0] = {
+				projectRoot,
+				targetFile,
+				cache: discoveryCache,
+			};
+			if (disabledSources !== undefined) {
+				findOptions.disabledSources = disabledSources;
+			}
+			const candidates = deps.findCandidates(findOptions);
 
 			for (const candidate of sortCandidates(candidates)) {
 				const loadedRule = loadCandidate(
@@ -309,7 +321,7 @@ function loadCandidate(
 		frontmatter: parsed.frontmatter,
 		body: parsed.body,
 		contentHash: hashContent(content),
-		diagnostic: parsed.diagnostic,
+		...(parsed.diagnostic === undefined ? {} : { diagnostic: parsed.diagnostic }),
 	} satisfies LoadedRuleContent;
 	loadedRuleContent?.set(candidate.realPath, loadedContent);
 	return loadedRuleFromContent(candidate, loadedContent, diagnostics);

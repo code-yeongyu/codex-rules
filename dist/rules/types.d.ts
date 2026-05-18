@@ -118,4 +118,3 @@ export interface RuleDiagnostic {
     source: string;
     message: string;
 }
-//# sourceMappingURL=types.d.ts.map

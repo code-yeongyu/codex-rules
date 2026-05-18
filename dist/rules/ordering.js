@@ -25,4 +25,3 @@ function compareString(a, b) {
         return 1;
     return 0;
 }
-//# sourceMappingURL=ordering.js.map

@@ -105,12 +105,15 @@ function fingerprintDynamicTargets(cwd, targetPaths, config) {
         const projectRoot = cwdProjectRoot !== null && isSameOrChildPath(targetPath, cwdProjectRoot)
             ? cwdProjectRoot
             : findProjectRoot(targetPath);
-        const candidates = findRuleCandidates({
+        const findOptions = {
             projectRoot,
             targetFile: targetPath,
-            disabledSources,
             cache: discoveryCache,
-        });
+        };
+        if (disabledSources !== undefined) {
+            findOptions.disabledSources = disabledSources;
+        }
+        const candidates = findRuleCandidates(findOptions);
         const candidateFingerprint = sortCandidates(candidates).map(fingerprintCandidate).join("\u0001");
         const cacheKey = dynamicTargetCacheKey(targetPath);
         fingerprints.push({
@@ -194,4 +197,3 @@ function displayPath(cwd, filePath) {
 function toPosixPath(path) {
     return path.replaceAll("\\", "/");
 }
-//# sourceMappingURL=codex-hook.js.map

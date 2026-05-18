@@ -99,8 +99,9 @@ function parseYamlFrontmatter(yamlContent) {
         }
         lineIndex += 1;
     }
-    if (globValues.length === 1) {
-        frontmatter.globs = globValues[0];
+    const singleGlob = globValues[0];
+    if (globValues.length === 1 && singleGlob !== undefined) {
+        frontmatter.globs = singleGlob;
     }
     else if (globValues.length > 1) {
         frontmatter.globs = globValues;
@@ -285,4 +286,3 @@ function stripComment(line) {
     }
     return line;
 }
-//# sourceMappingURL=parser.js.map

@@ -24,4 +24,3 @@ export interface FinderOptions {
 export declare function createRuleDiscoveryCache(): RuleDiscoveryCache;
 export declare function findRuleCandidates(options: FinderOptions): RuleCandidate[];
 export {};
-//# sourceMappingURL=finder.d.ts.map
