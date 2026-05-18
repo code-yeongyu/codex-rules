@@ -1,4 +1,5 @@
 import { type RuleDiscoveryCache } from "./finder.js";
+import { matchRule } from "./matcher.js";
 import type { LoadedRule, PiRulesConfig, RuleCandidate, RuleDiagnostic, SessionState } from "./types.js";
 export interface EngineDeps {
     findCandidates: (options: {
@@ -11,6 +12,7 @@ export interface EngineDeps {
     }) => RuleCandidate[];
     readFile: (path: string) => string | null;
     findProjectRoot: (startPath: string) => string | null;
+    matchRule?: typeof matchRule;
 }
 export interface Engine {
     state: SessionState;

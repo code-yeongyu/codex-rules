@@ -7,6 +7,7 @@ import { formatDynamicBlock, formatStaticBlock } from "./formatter.js";
 import { hashContent, matchRule } from "./matcher.js";
 import { sortCandidates } from "./ordering.js";
 import { parseRule } from "./parser.js";
+const MAX_DYNAMIC_MATCH_CACHE_ENTRIES = 4096;
 const ROOT_SINGLE_FILE_SOURCES = new Set(PROJECT_SINGLE_FILES.filter((source) => !source.includes("/")));
 export function defaultConfig() {
     return {
@@ -19,6 +20,7 @@ export function defaultConfig() {
 }
 export function createEngine(config, deps) {
     const state = createSessionState();
+    const dynamicMatchCache = new Map();
     function loadStaticRules(cwd) {
         state.cwd = cwd;
         if (config.disabled || config.mode === "off" || config.mode === "dynamic") {
@@ -57,12 +59,8 @@ export function createEngine(config, deps) {
                 if (loadedRule === null) {
                     continue;
                 }
-                const matchResult = matchRule({
-                    frontmatter: loadedRule.frontmatter,
-                    isSingleFile: candidate.isSingleFile,
-                    pathBases: pathBasesForTarget(projectRoot, targetFile, candidate),
-                });
-                if (!matchResult.matched) {
+                const matchReason = matchDynamicRuleCached(dynamicMatchCache, projectRoot, targetFile, candidate, loadedRule, deps.matchRule ?? matchRule);
+                if (matchReason === null) {
                     continue;
                 }
                 const dedupKey = ruleDedupKey(loadedRule);
@@ -70,7 +68,7 @@ export function createEngine(config, deps) {
                     continue;
                 }
                 seenRules.add(dedupKey);
-                rules.push({ ...loadedRule, matchReason: matchResult.reason });
+                rules.push({ ...loadedRule, matchReason });
             }
         }
         const sortedRules = sortCandidates(rules);
@@ -89,6 +87,7 @@ export function createEngine(config, deps) {
         }),
         resetSession: (cwd) => {
             clearSession(state);
+            dynamicMatchCache.clear();
             if (cwd !== undefined) {
                 state.cwd = cwd;
             }
@@ -98,6 +97,45 @@ export function createEngine(config, deps) {
         markStaticInjected: (rule) => markStaticInjectedInState(state, rule),
         markDynamicInjected: (rule) => markDynamicInjectedInState(state, rule),
     };
+}
+function matchDynamicRuleCached(cache, projectRoot, targetFile, candidate, loadedRule, matchRuleImpl) {
+    const cacheKey = dynamicMatchCacheKey(projectRoot, targetFile, candidate, loadedRule.contentHash);
+    if (cache.has(cacheKey)) {
+        const cachedReason = cache.get(cacheKey) ?? null;
+        cache.delete(cacheKey);
+        cache.set(cacheKey, cachedReason);
+        return cachedReason;
+    }
+    const matchResult = matchRuleImpl({
+        frontmatter: loadedRule.frontmatter,
+        isSingleFile: candidate.isSingleFile,
+        pathBases: pathBasesForTarget(projectRoot, targetFile, candidate),
+    });
+    const reason = matchResult.matched ? matchResult.reason : null;
+    setDynamicMatchCacheEntry(cache, cacheKey, reason);
+    return reason;
+}
+function setDynamicMatchCacheEntry(cache, cacheKey, reason) {
+    if (cache.size >= MAX_DYNAMIC_MATCH_CACHE_ENTRIES) {
+        const oldestCacheKey = cache.keys().next().value;
+        if (oldestCacheKey !== undefined) {
+            cache.delete(oldestCacheKey);
+        }
+    }
+    cache.set(cacheKey, reason);
+}
+function dynamicMatchCacheKey(projectRoot, targetFile, candidate, contentHash) {
+    return [
+        projectRoot ?? "",
+        toPosixPath(resolve(targetFile)),
+        candidate.realPath,
+        candidate.relativePath,
+        candidate.source,
+        candidate.isGlobal ? "global" : "project",
+        candidate.isSingleFile ? "single" : "multi",
+        String(candidate.distance),
+        contentHash,
+    ].join("\0");
 }
 function loadStaticCandidates(candidates, deps, projectRoot) {
     const rules = [];
