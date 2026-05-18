@@ -52,6 +52,7 @@ export function createEngine(config, deps) {
         const projectMembership = new Map();
         const disabledSources = disabledSourcesFor(config);
         const discoveryCache = createRuleDiscoveryCache();
+        const candidateDiscoveryCache = new Map();
         const cwdProjectRoot = deps.findProjectRoot(cwd);
         for (const targetFile of uniqueStrings(targetPaths)) {
             const projectRoot = cwdProjectRoot !== null && isSameOrChildPath(targetFile, cwdProjectRoot)
@@ -65,8 +66,8 @@ export function createEngine(config, deps) {
             if (disabledSources !== undefined) {
                 findOptions.disabledSources = disabledSources;
             }
-            const candidates = deps.findCandidates(findOptions);
-            for (const candidate of sortCandidates(candidates)) {
+            const candidates = findSortedCandidatesCached(candidateDiscoveryCache, deps.findCandidates, findOptions);
+            for (const candidate of candidates) {
                 const loadedRule = loadCandidate(candidate, deps, diagnostics, projectRoot, loadedRuleContent, projectMembership);
                 if (loadedRule === null) {
                     continue;
@@ -250,6 +251,23 @@ function realPathOrResolved(path) {
     catch {
         return resolve(path);
     }
+}
+function findSortedCandidatesCached(cache, findCandidates, options) {
+    const cacheKey = candidateDiscoveryCacheKey(options);
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const candidates = sortCandidates(findCandidates(options));
+    cache.set(cacheKey, candidates);
+    return candidates;
+}
+function candidateDiscoveryCacheKey(options) {
+    return [
+        options.projectRoot ?? "",
+        options.targetFile === null ? "" : dirname(resolve(options.targetFile)),
+        ...[...(options.disabledSources ?? [])].sort(),
+    ].join("\0");
 }
 function isSameOrChildPath(childPath, parentPath) {
     const childRelativePath = relative(parentPath, resolve(childPath));

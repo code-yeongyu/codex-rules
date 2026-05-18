@@ -30,6 +30,7 @@ interface LoadedRuleContent {
 }
 
 type CandidateProjectMembership = Map<string, boolean>;
+type CandidateDiscoveryCache = Map<string, RuleCandidate[]>;
 type DynamicMatchCache = Map<string, MatchReason | null>;
 
 const MAX_DYNAMIC_MATCH_CACHE_ENTRIES = 4096;
@@ -118,6 +119,7 @@ export function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine {
 		const projectMembership = new Map<string, boolean>();
 		const disabledSources = disabledSourcesFor(config);
 		const discoveryCache = createRuleDiscoveryCache();
+		const candidateDiscoveryCache: CandidateDiscoveryCache = new Map();
 		const cwdProjectRoot = deps.findProjectRoot(cwd);
 
 		for (const targetFile of uniqueStrings(targetPaths)) {
@@ -133,9 +135,9 @@ export function createEngine(config: PiRulesConfig, deps: EngineDeps): Engine {
 			if (disabledSources !== undefined) {
 				findOptions.disabledSources = disabledSources;
 			}
-			const candidates = deps.findCandidates(findOptions);
+			const candidates = findSortedCandidatesCached(candidateDiscoveryCache, deps.findCandidates, findOptions);
 
-			for (const candidate of sortCandidates(candidates)) {
+			for (const candidate of candidates) {
 				const loadedRule = loadCandidate(
 					candidate,
 					deps,
@@ -393,6 +395,30 @@ function realPathOrResolved(path: string): string {
 	} catch {
 		return resolve(path);
 	}
+}
+
+function findSortedCandidatesCached(
+	cache: CandidateDiscoveryCache,
+	findCandidates: EngineDeps["findCandidates"],
+	options: Parameters<EngineDeps["findCandidates"]>[0],
+): RuleCandidate[] {
+	const cacheKey = candidateDiscoveryCacheKey(options);
+	const cached = cache.get(cacheKey);
+	if (cached !== undefined) {
+		return cached;
+	}
+
+	const candidates = sortCandidates(findCandidates(options));
+	cache.set(cacheKey, candidates);
+	return candidates;
+}
+
+function candidateDiscoveryCacheKey(options: Parameters<EngineDeps["findCandidates"]>[0]): string {
+	return [
+		options.projectRoot ?? "",
+		options.targetFile === null ? "" : dirname(resolve(options.targetFile)),
+		...[...(options.disabledSources ?? [])].sort(),
+	].join("\0");
 }
 
 function isSameOrChildPath(childPath: string, parentPath: string): boolean {

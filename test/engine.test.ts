@@ -57,6 +57,31 @@ describe("rule engine dynamic matching", () => {
 		});
 	});
 
+	it("#given distinct target files in same directory #when loading dynamic rules #then candidate discovery is reused", () => {
+		// given
+		const firstTarget = join(projectRoot, "src", "first.ts");
+		const secondTarget = join(projectRoot, "src", "second.ts");
+		const thirdTarget = join(projectRoot, "src", "third.ts");
+		const candidate = makeCandidate();
+		let findCandidatesCalls = 0;
+		const deps = {
+			findProjectRoot: () => projectRoot,
+			findCandidates: () => {
+				findCandidatesCalls += 1;
+				return [candidate];
+			},
+			readFile: () => ["---", "globs: **/*.ts", "---", "", "Prefer strict TypeScript."].join("\n"),
+		} satisfies EngineDeps;
+		const engine = createEngine(defaultConfig(), deps);
+
+		// when
+		const result = engine.loadDynamicRules(projectRoot, [firstTarget, secondTarget, thirdTarget]);
+
+		// then
+		expect(result.rules).toHaveLength(1);
+		expect(findCandidatesCalls).toBe(1);
+	});
+
 	it("#given same rule content and target across loads #when loading dynamic rules repeats #then cached match decision is reused", () => {
 		// given
 		const targetPath = join(projectRoot, "src", "app.ts");
