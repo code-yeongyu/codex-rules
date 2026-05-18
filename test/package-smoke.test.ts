@@ -63,7 +63,7 @@ describe("plugin package metadata", () => {
 		// then
 		expect(packageJson.type).toBe("module");
 		expect(packageJson.packageManager).toBe("npm@11.12.1");
-		expect(packageJson.dependencies ?? {}).toEqual({});
+		expect(packageJson.dependencies ?? {}).toEqual({ picomatch: "^4.0.3" });
 		expect(packageJson.bin["codex-rules"]).toBe("./dist/cli.js");
 		expect(pluginJson.hooks).toBe("./hooks/hooks.json");
 		expect(cliSource.startsWith("#!/usr/bin/env node")).toBe(true);
