@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import picomatch from "picomatch";
 const compiledPatternSets = new Map();
 export function matchRule(input) {
     if (input.isSingleFile) {
@@ -77,53 +78,7 @@ function compilePatternSet(patterns) {
     return { positivePatterns, negativeMatchers };
 }
 function createGlobMatcher(pattern) {
-    const expression = globToRegExp(normalizePath(pattern));
-    return (path) => expression.test(path);
-}
-function globToRegExp(pattern) {
-    let source = "^";
-    for (let index = 0; index < pattern.length; index += 1) {
-        const char = pattern[index];
-        const nextChar = pattern[index + 1];
-        if (char === "*" && nextChar === "*") {
-            const afterGlobStar = pattern[index + 2];
-            if (afterGlobStar === "/") {
-                source += "(?:.*/)?";
-                index += 2;
-            }
-            else {
-                source += ".*";
-                index += 1;
-            }
-            continue;
-        }
-        if (char === "*") {
-            source += "[^/]*";
-            continue;
-        }
-        if (char === "?") {
-            source += "[^/]";
-            continue;
-        }
-        if (char === "{") {
-            const closeIndex = pattern.indexOf("}", index + 1);
-            if (closeIndex !== -1) {
-                const alternatives = pattern
-                    .slice(index + 1, closeIndex)
-                    .split(",")
-                    .map(escapeRegExp)
-                    .join("|");
-                source += `(?:${alternatives})`;
-                index = closeIndex;
-                continue;
-            }
-        }
-        source += escapeRegExp(char ?? "");
-    }
-    return new RegExp(`${source}$`);
-}
-function escapeRegExp(value) {
-    return value.replace(/[\\^$+?.()|[\]{}]/g, "\\$&");
+    return picomatch(normalizePath(pattern), { bash: true, dot: true });
 }
 function isExcluded(pathBase, negativeMatchers) {
     for (const isMatch of negativeMatchers) {

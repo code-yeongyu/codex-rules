@@ -168,6 +168,28 @@ describe("matchRule", () => {
 		expect(matched).toBe(true);
 	});
 
+	it("#given character class glob #when matching listed extension #then target matches", () => {
+		// given
+		const globs = "src/**/*.[tj]s";
+
+		// when
+		const matched = matchGlobs(globs, "src/features/app.ts");
+
+		// then
+		expect(matched).toBe(true);
+	});
+
+	it("#given extglob pattern #when matching allowed extension #then target matches", () => {
+		// given
+		const globs = "src/**/*.@(ts|tsx)";
+
+		// when
+		const matched = matchGlobs(globs, "src/features/app.tsx");
+
+		// then
+		expect(matched).toBe(true);
+	});
+
 	it("#given duplicate normalized patterns #when normalizing #then first unique pattern order is kept", () => {
 		// given
 		const frontmatter = {
