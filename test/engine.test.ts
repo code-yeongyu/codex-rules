@@ -109,6 +109,34 @@ describe("rule engine dynamic matching", () => {
 		expect(matchCalls).toBe(2);
 	});
 
+	it("#given same rule path changes frontmatter #when loading dynamic rules repeats #then cached match decision invalidates", () => {
+		// given
+		const targetPath = join(projectRoot, "src", "app.ts");
+		const candidate = makeCandidate();
+		let globs = "**/*.ts";
+		let matchCalls = 0;
+		const deps = {
+			findProjectRoot: () => projectRoot,
+			findCandidates: () => [candidate],
+			readFile: () => ["---", `globs: ${globs}`, "---", "", "Prefer strict TypeScript."].join("\n"),
+			matchRule: (input) => {
+				matchCalls += 1;
+				return defaultMatchRule(input);
+			},
+		} satisfies EngineDeps;
+		const engine = createEngine(defaultConfig(), deps);
+
+		// when
+		const firstResult = engine.loadDynamicRules(projectRoot, [targetPath]);
+		globs = "**/*.tsx";
+		const secondResult = engine.loadDynamicRules(projectRoot, [targetPath]);
+
+		// then
+		expect(firstResult.rules).toHaveLength(1);
+		expect(secondResult.rules).toHaveLength(0);
+		expect(matchCalls).toBe(2);
+	});
+
 	it("#given same rule and different targets #when loading dynamic rules repeats #then target-specific decisions do not leak", () => {
 		// given
 		const sourceTarget = join(projectRoot, "src", "app.ts");

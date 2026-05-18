@@ -308,7 +308,7 @@ function loadCandidate(
 	const loadedContent = {
 		frontmatter: parsed.frontmatter,
 		body: parsed.body,
-		contentHash: hashContent(parsed.body),
+		contentHash: hashContent(content),
 		diagnostic: parsed.diagnostic,
 	} satisfies LoadedRuleContent;
 	loadedRuleContent?.set(candidate.realPath, loadedContent);

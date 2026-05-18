@@ -106,8 +106,9 @@ function measureRun(targetPaths) {
 				return ruleContent(path);
 			},
 		});
+		const generatedTargetPaths = targetPaths(projectRoot);
 		const start = process.hrtime.bigint();
-		engine.loadDynamicRules(projectRoot, targetPaths(projectRoot));
+		engine.loadDynamicRules(projectRoot, generatedTargetPaths);
 		const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
 		return { durationMs, counters };
 	} finally {

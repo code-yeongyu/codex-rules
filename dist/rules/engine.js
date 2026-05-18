@@ -183,7 +183,7 @@ function loadCandidate(candidate, deps, diagnostics, projectRoot, loadedRuleCont
     const loadedContent = {
         frontmatter: parsed.frontmatter,
         body: parsed.body,
-        contentHash: hashContent(parsed.body),
+        contentHash: hashContent(content),
         diagnostic: parsed.diagnostic,
     };
     loadedRuleContent?.set(candidate.realPath, loadedContent);
