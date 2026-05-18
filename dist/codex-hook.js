@@ -144,8 +144,7 @@ function fingerprintCandidate(candidate) {
 function fileFingerprint(filePath) {
     try {
         const stats = statSync(filePath, { bigint: true });
-        const contentHash = hashContent(readFileSync(filePath, "utf8"));
-        return `${stats.mtimeNs}:${stats.ctimeNs}:${stats.size}:${contentHash}`;
+        return `${stats.mtimeNs}:${stats.ctimeNs}:${stats.size}`;
     }
     catch {
         return "missing";
