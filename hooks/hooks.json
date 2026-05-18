@@ -36,6 +36,19 @@
 					}
 				]
 			}
+		],
+		"PostCompact": [
+			{
+				"matcher": "manual|auto",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook post-compact",
+						"timeout": 10,
+						"statusMessage": "resetting project rule cache"
+					}
+				]
+			}
 		]
 	}
 }

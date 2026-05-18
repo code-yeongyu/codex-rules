@@ -7,18 +7,23 @@ import type { Engine } from "./rules/engine.js";
 interface SerializedSessionState {
 	staticDedup: string[];
 	dynamicDedup: Record<string, string[]>;
+	dynamicTargetFingerprints?: Record<string, string>;
 }
 
 export function hydrateEngineState(engine: Engine, cachePath: string): void {
 	const state = readSessionState(cachePath);
 	engine.state.staticDedup.clear();
 	engine.state.dynamicDedup.clear();
+	engine.state.dynamicTargetFingerprints.clear();
 
 	for (const key of state.staticDedup) {
 		engine.state.staticDedup.add(key);
 	}
 	for (const [scope, keys] of Object.entries(state.dynamicDedup)) {
 		engine.state.dynamicDedup.set(scope, new Set(keys));
+	}
+	for (const [targetKey, fingerprint] of Object.entries(state.dynamicTargetFingerprints ?? {})) {
+		engine.state.dynamicTargetFingerprints.set(targetKey, fingerprint);
 	}
 }
 
@@ -31,6 +36,7 @@ export function persistEngineState(engine: Engine, cachePath: string): void {
 	writeSessionState(cachePath, {
 		staticDedup: [...engine.state.staticDedup],
 		dynamicDedup,
+		dynamicTargetFingerprints: Object.fromEntries(engine.state.dynamicTargetFingerprints.entries()),
 	});
 }
 
@@ -59,7 +65,7 @@ function writeSessionState(cachePath: string, state: SerializedSessionState): vo
 }
 
 function emptyState(): SerializedSessionState {
-	return { staticDedup: [], dynamicDedup: {} };
+	return { staticDedup: [], dynamicDedup: {}, dynamicTargetFingerprints: {} };
 }
 
 function safePathSegment(value: string): string {
@@ -70,11 +76,17 @@ function isSerializedSessionState(value: unknown): value is SerializedSessionSta
 	if (!isRecord(value) || !Array.isArray(value.staticDedup) || !isRecord(value.dynamicDedup)) {
 		return false;
 	}
+	const dynamicTargetFingerprints = value.dynamicTargetFingerprints;
 	return (
 		value.staticDedup.every((item) => typeof item === "string") &&
 		Object.values(value.dynamicDedup).every(
 			(item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string"),
-		)
+		) &&
+		(dynamicTargetFingerprints === undefined ||
+			(isRecord(dynamicTargetFingerprints) &&
+				Object.entries(dynamicTargetFingerprints).every(
+					([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string",
+				)))
 	);
 }
 

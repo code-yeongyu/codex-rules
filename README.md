@@ -6,6 +6,7 @@ It ports the `pi-rules` rule injector to Codex:
 
 - `SessionStart` and `UserPromptSubmit` load static project instructions once per session.
 - `PostToolUse` watches supported file reads, edits, `apply_patch`, MCP filesystem payloads, and shell command file references, then injects matching file-specific rules as additional context.
+- `PostCompact` clears the per-session injection cache after manual or automatic compaction so relevant rules can be reintroduced into the compacted conversation.
 - Session-level deduplication prevents the same rule from being repeated after it has been injected.
 
 `PostToolUse` output is context-only: it emits `hookSpecificOutput.additionalContext` and does not rewrite tool output.

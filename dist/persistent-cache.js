@@ -5,11 +5,15 @@ export function hydrateEngineState(engine, cachePath) {
     const state = readSessionState(cachePath);
     engine.state.staticDedup.clear();
     engine.state.dynamicDedup.clear();
+    engine.state.dynamicTargetFingerprints.clear();
     for (const key of state.staticDedup) {
         engine.state.staticDedup.add(key);
     }
     for (const [scope, keys] of Object.entries(state.dynamicDedup)) {
         engine.state.dynamicDedup.set(scope, new Set(keys));
+    }
+    for (const [targetKey, fingerprint] of Object.entries(state.dynamicTargetFingerprints ?? {})) {
+        engine.state.dynamicTargetFingerprints.set(targetKey, fingerprint);
     }
 }
 export function persistEngineState(engine, cachePath) {
@@ -20,6 +24,7 @@ export function persistEngineState(engine, cachePath) {
     writeSessionState(cachePath, {
         staticDedup: [...engine.state.staticDedup],
         dynamicDedup,
+        dynamicTargetFingerprints: Object.fromEntries(engine.state.dynamicTargetFingerprints.entries()),
     });
 }
 export function clearSessionState(cachePath) {
@@ -45,7 +50,7 @@ function writeSessionState(cachePath, state) {
     writeFileSync(cachePath, `${JSON.stringify(state)}\n`);
 }
 function emptyState() {
-    return { staticDedup: [], dynamicDedup: {} };
+    return { staticDedup: [], dynamicDedup: {}, dynamicTargetFingerprints: {} };
 }
 function safePathSegment(value) {
     return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120) || "unknown-session";
@@ -54,8 +59,12 @@ function isSerializedSessionState(value) {
     if (!isRecord(value) || !Array.isArray(value.staticDedup) || !isRecord(value.dynamicDedup)) {
         return false;
     }
+    const dynamicTargetFingerprints = value.dynamicTargetFingerprints;
     return (value.staticDedup.every((item) => typeof item === "string") &&
-        Object.values(value.dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")));
+        Object.values(value.dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")) &&
+        (dynamicTargetFingerprints === undefined ||
+            (isRecord(dynamicTargetFingerprints) &&
+                Object.entries(dynamicTargetFingerprints).every(([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string"))));
 }
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);

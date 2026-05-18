@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runPostToolUseHook } from "../dist/codex-hook.js";
 import { createEngine, defaultConfig } from "../dist/rules/engine.js";
 
 const ITERATIONS = 40;
@@ -15,7 +16,7 @@ const args = process.argv.slice(2);
 const writeBaselinePath = readOption("--write-baseline");
 const comparePath = readOption("--compare");
 
-const result = runBenchmark();
+const result = await runBenchmark();
 
 if (writeBaselinePath !== undefined) {
 	writeFileSync(writeBaselinePath, `${JSON.stringify(result, null, "\t")}\n`);
@@ -47,7 +48,7 @@ function readOption(name) {
 	return value;
 }
 
-function runBenchmark() {
+async function runBenchmark() {
 	const scenarios = [
 		runScenario("duplicate-targets", duplicateTargets, DUPLICATE_TARGET_COUNT),
 		runScenario("distinct-targets", distinctTargets, DISTINCT_TARGET_COUNT),
@@ -58,7 +59,74 @@ function runBenchmark() {
 		warmupIterations: WARMUP_ITERATIONS,
 		ruleCount: RULE_COUNT,
 		scenarios,
+		hookFastPath: await runHookFastPathScenario(),
 	};
+}
+
+async function runHookFastPathScenario() {
+	const durations = [];
+	let repeatOutputBytes = 0;
+
+	for (let iteration = 0; iteration < ITERATIONS + WARMUP_ITERATIONS; iteration += 1) {
+		const run = await measureHookFastPathRun();
+		if (iteration >= WARMUP_ITERATIONS) {
+			durations.push(run.repeatDurationMs);
+			repeatOutputBytes += run.repeatOutputBytes;
+		}
+	}
+
+	return {
+		name: "repeat-post-tool-use",
+		medianRepeatMs: median(durations),
+		minRepeatMs: Math.min(...durations),
+		maxRepeatMs: Math.max(...durations),
+		repeatOutputBytes,
+	};
+}
+
+async function measureHookFastPathRun() {
+	const projectRoot = mkdtempSync(join(tmpdir(), "codex-rules-hook-bench-"));
+	const pluginData = mkdtempSync(join(tmpdir(), "codex-rules-hook-data-"));
+	try {
+		mkdirSync(join(projectRoot, "src"), { recursive: true });
+		mkdirSync(join(projectRoot, ".sisyphus", "rules"), { recursive: true });
+		writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ name: "bench" }));
+		writeFileSync(join(projectRoot, "src", "app.ts"), "export const app = true;\n");
+		for (let index = 0; index < RULE_COUNT; index += 1) {
+			writeFileSync(join(projectRoot, ".sisyphus", "rules", `rule-${index}.md`), ruleContent(`rule-${index}`));
+		}
+
+		const input = {
+			session_id: "bench-session",
+			turn_id: "bench-turn",
+			transcript_path: null,
+			cwd: projectRoot,
+			hook_event_name: "PostToolUse",
+			model: "gpt-5.5",
+			permission_mode: "default",
+			tool_name: "mcp__filesystem__read_file",
+			tool_input: { path: join(projectRoot, "src", "app.ts") },
+			tool_response: { text: "file contents" },
+			tool_use_id: "bench-call",
+		};
+
+		await runPostToolUseHook(input, {
+			pluginDataRoot: pluginData,
+			env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+		});
+		const start = process.hrtime.bigint();
+		const repeatOutput = await runPostToolUseHook(input, {
+			pluginDataRoot: pluginData,
+			env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+		});
+		return {
+			repeatDurationMs: Number(process.hrtime.bigint() - start) / 1_000_000,
+			repeatOutputBytes: Buffer.byteLength(repeatOutput),
+		};
+	} finally {
+		rmSync(projectRoot, { recursive: true, force: true });
+		rmSync(pluginData, { recursive: true, force: true });
+	}
 }
 
 function runScenario(name, targetFactory, targetCount) {

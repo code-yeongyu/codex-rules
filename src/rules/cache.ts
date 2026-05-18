@@ -3,7 +3,14 @@ import type { LoadedRule, SessionState } from "./types.js";
 const DYNAMIC_SESSION_KEY = "__pi-rules-session__";
 
 export function createSessionState(cwd?: string): SessionState {
-	return { cwd, staticDedup: new Set(), dynamicDedup: new Map(), loadedRules: [], diagnostics: [] };
+	return {
+		cwd,
+		staticDedup: new Set(),
+		dynamicDedup: new Map(),
+		dynamicTargetFingerprints: new Map(),
+		loadedRules: [],
+		diagnostics: [],
+	};
 }
 
 export function staticDedupKey(cwd: string, rulePath: string, contentHash: string): string {
@@ -51,6 +58,7 @@ export function isDynamicInjected(state: SessionState, rule: LoadedRule): boolea
 export function clearSession(state: SessionState): void {
 	state.staticDedup.clear();
 	state.dynamicDedup.clear();
+	state.dynamicTargetFingerprints.clear();
 	state.loadedRules.length = 0;
 	state.diagnostics.length = 0;
 }

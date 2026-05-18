@@ -22,6 +22,7 @@ describe("plugin package metadata", () => {
 			hookConfig.SessionStart?.[0]?.hooks[0]?.command,
 			hookConfig.UserPromptSubmit?.[0]?.hooks[0]?.command,
 			hookConfig.PostToolUse?.[0]?.hooks[0]?.command,
+			hookConfig.PostCompact?.[0]?.hooks[0]?.command,
 		];
 
 		// then
@@ -35,6 +36,7 @@ describe("plugin package metadata", () => {
 			`node "${pluginRoot}/dist/cli.js" hook session-start`,
 			`node "${pluginRoot}/dist/cli.js" hook user-prompt-submit`,
 			`node "${pluginRoot}/dist/cli.js" hook post-tool-use`,
+			`node "${pluginRoot}/dist/cli.js" hook post-compact`,
 		]);
 	});
 });

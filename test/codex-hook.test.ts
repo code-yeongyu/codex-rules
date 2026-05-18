@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+	type CodexPostCompactInput,
 	type CodexPostToolUseInput,
 	type CodexSessionStartInput,
+	runPostCompactHook,
 	runPostToolUseHook,
 	runSessionStartHook,
 	runUserPromptSubmitHook,
@@ -19,11 +21,17 @@ type CliResult = {
 	stderr: string;
 };
 
+type SessionCache = {
+	staticDedup?: string[];
+	dynamicDedup?: Record<string, string[]>;
+	dynamicTargetFingerprints?: Record<string, string>;
+};
+
 const CLI_PATH = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
-function runHookCli(input: string): Promise<CliResult> {
+function runHookCli(input: string, subcommand = "post-tool-use"): Promise<CliResult> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, [CLI_PATH, "hook", "post-tool-use"], {
+		const child = spawn(process.execPath, [CLI_PATH, "hook", subcommand], {
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 		let stdout = "";
@@ -47,6 +55,10 @@ function runHookCli(input: string): Promise<CliResult> {
 const tempDirectories: string[] = [];
 const PROJECT_ONLY_ENV = {
 	CODEX_RULES_ENABLED_SOURCES: "AGENTS.md,.sisyphus/rules",
+};
+
+const RULES_ONLY_ENV = {
+	CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules",
 };
 
 afterEach(() => {
@@ -91,6 +103,18 @@ function sessionStartInput(root: string): CodexSessionStartInput {
 	};
 }
 
+function postCompactInput(root: string): CodexPostCompactInput {
+	return {
+		session_id: "session-1",
+		turn_id: "turn-compact",
+		transcript_path: null,
+		cwd: root,
+		hook_event_name: "PostCompact",
+		model: "gpt-5.5",
+		trigger: "manual",
+	};
+}
+
 function postToolUseInput(root: string, filePath: string): CodexPostToolUseInput {
 	return {
 		session_id: "session-1",
@@ -124,6 +148,21 @@ function parseHookOutput(output: string): {
 
 function occurrenceCount(value: string, search: string): number {
 	return value.split(search).length - 1;
+}
+
+function sessionCacheFilePath(pluginData: string, sessionId = "session-1"): string {
+	return path.join(pluginData, "sessions", `${sessionId}.json`);
+}
+
+function readSessionCache(pluginData: string): SessionCache {
+	return JSON.parse(readFileSync(sessionCacheFilePath(pluginData), "utf8")) as SessionCache;
+}
+
+function writeTypeScriptRule(root: string, globExpression: string, body: string): void {
+	writeFileSync(
+		path.join(root, ".sisyphus", "rules", "typescript.md"),
+		["---", "description: TypeScript", `globs: ${globExpression}`, "---", "", body].join("\n"),
+	);
 }
 
 describe("codex rules hooks", () => {
@@ -166,6 +205,29 @@ describe("codex rules hooks", () => {
 
 		// then
 		expect(output).toBe("");
+	});
+
+	it("#given resumed session #when SessionStart runs #then it preserves the session cache", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const input = sessionStartInput(root);
+		await runSessionStartHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// when
+		const resumeOutput = await runSessionStartHook(
+			{ ...input, source: "resume" },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+		const clearOutput = await runSessionStartHook(
+			{ ...input, source: "clear" },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(resumeOutput).toBe("");
+		expect(parseHookOutput(clearOutput).hookSpecificOutput?.additionalContext).toContain(
+			"Always wear safety goggles",
+		);
 	});
 
 	it("#given read-file tool result #when PostToolUse runs #then emits matching dynamic rule context", async () => {
@@ -228,12 +290,81 @@ describe("codex rules hooks", () => {
 		const filePath = path.join(root, "src", "app.ts");
 		const input = postToolUseInput(root, filePath);
 		await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+		const cachedState = readSessionCache(pluginData);
 
 		// when
 		const output = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
 
 		// then
 		expect(output).toBe("");
+		expect(Object.keys(cachedState.dynamicTargetFingerprints ?? {})).toHaveLength(1);
+		expect(readSessionCache(pluginData).dynamicTargetFingerprints).toEqual(cachedState.dynamicTargetFingerprints);
+	});
+
+	it("#given cached target in one session #when another session reads it #then PostToolUse rechecks independently", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		await runPostToolUseHook(postToolUseInput(root, filePath), { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// when
+		const output = await runPostToolUseHook(
+			{ ...postToolUseInput(root, filePath), session_id: "session-2" },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(parseHookOutput(output).hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+	});
+
+	it("#given cached dynamic target #when rule frontmatter changes #then PostToolUse rechecks the target", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const input = postToolUseInput(root, filePath);
+		await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: RULES_ONLY_ENV });
+		writeTypeScriptRule(root, '"**/*.ts"', "Prefer readonly TypeScript after rule edits.");
+
+		// when
+		const output = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: RULES_ONLY_ENV });
+
+		// then
+		expect(parseHookOutput(output).hookSpecificOutput?.additionalContext).toContain(
+			"Prefer readonly TypeScript after rule edits.",
+		);
+	});
+
+	it("#given cached dynamic context #when PostCompact runs #then PostToolUse can re-inject after compaction", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const input = postToolUseInput(root, filePath);
+		await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+		expect(await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV })).toBe("");
+
+		// when
+		const compactOutput = await runPostCompactHook(postCompactInput(root), { pluginDataRoot: pluginData });
+		const output = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+
+		// then
+		expect(compactOutput).toBe("");
+		expect(parseHookOutput(output).hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+	});
+
+	it("#given legacy session cache #when PostToolUse hydrates state #then it accepts the old shape", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		mkdirSync(path.join(pluginData, "sessions"), { recursive: true });
+		writeFileSync(sessionCacheFilePath(pluginData), `${JSON.stringify({ staticDedup: [], dynamicDedup: {} })}\n`);
+
+		// when
+		const output = await runPostToolUseHook(postToolUseInput(root, path.join(root, "src", "app.ts")), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+
+		// then
+		expect(parseHookOutput(output).hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
 	});
 
 	it("#given static-only mode #when PostToolUse runs #then emits no dynamic context", async () => {
@@ -328,6 +459,21 @@ describe("codex rules hooks", () => {
 
 		// when
 		const result = await runHookCli(input);
+
+		// then
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: "",
+			stderr: "",
+		});
+	});
+
+	it("#given malformed post-compact stdin #when hook CLI runs #then it no-ops without stderr", async () => {
+		// given
+		const input = `${JSON.stringify({ hook_event_name: "PostCompact", session_id: "s", turn_id: "t" })}\n`;
+
+		// when
+		const result = await runHookCli(input, "post-compact");
 
 		// then
 		expect(result).toEqual({

@@ -2,9 +2,11 @@
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 
 import {
+	type CodexPostCompactInput,
 	type CodexPostToolUseInput,
 	type CodexSessionStartInput,
 	type CodexUserPromptSubmitInput,
+	runPostCompactHook,
 	runPostToolUseHook,
 	runSessionStartHook,
 	runUserPromptSubmitHook,
@@ -12,6 +14,8 @@ import {
 
 const command = process.argv[2];
 const subcommand = process.argv[3];
+type HookCliEventName = "SessionStart" | "UserPromptSubmit" | "PostToolUse" | "PostCompact";
+type HookCliOptions = { pluginDataRoot: string | undefined };
 
 if (command === "hook" && subcommand === "session-start") {
 	await runHookCli("SessionStart");
@@ -19,27 +23,35 @@ if (command === "hook" && subcommand === "session-start") {
 	await runHookCli("UserPromptSubmit");
 } else if (command === "hook" && subcommand === "post-tool-use") {
 	await runHookCli("PostToolUse");
+} else if (command === "hook" && subcommand === "post-compact") {
+	await runHookCli("PostCompact");
 } else {
-	process.stderr.write("Usage: codex-rules hook [session-start|user-prompt-submit|post-tool-use]\n");
+	process.stderr.write("Usage: codex-rules hook [session-start|user-prompt-submit|post-tool-use|post-compact]\n");
 	process.exitCode = 1;
 }
 
-async function runHookCli(eventName: "SessionStart" | "UserPromptSubmit" | "PostToolUse"): Promise<void> {
+async function runHookCli(eventName: HookCliEventName): Promise<void> {
 	const raw = await readStdin();
 	if (raw.trim().length === 0) return;
 	const parsed = parseHookInput(raw);
 	if (!parsed) return;
 	const options = { pluginDataRoot: process.env.PLUGIN_DATA };
-	const output =
-		eventName === "SessionStart" && isCodexSessionStartInput(parsed)
-			? await runSessionStartHook(parsed, options)
-			: eventName === "UserPromptSubmit" && isCodexUserPromptSubmitInput(parsed)
-				? await runUserPromptSubmitHook(parsed, options)
-				: eventName === "PostToolUse" && isCodexPostToolUseInput(parsed)
-					? await runPostToolUseHook(parsed, options)
-					: "";
+	const output = await runHook(eventName, parsed, options);
 	if (output.length > 0) {
 		processStdout.write(output);
+	}
+}
+
+async function runHook(eventName: HookCliEventName, parsed: unknown, options: HookCliOptions): Promise<string> {
+	switch (eventName) {
+		case "SessionStart":
+			return isCodexSessionStartInput(parsed) ? await runSessionStartHook(parsed, options) : "";
+		case "UserPromptSubmit":
+			return isCodexUserPromptSubmitInput(parsed) ? await runUserPromptSubmitHook(parsed, options) : "";
+		case "PostToolUse":
+			return isCodexPostToolUseInput(parsed) ? await runPostToolUseHook(parsed, options) : "";
+		case "PostCompact":
+			return isCodexPostCompactInput(parsed) ? await runPostCompactHook(parsed, options) : "";
 	}
 }
 
@@ -57,6 +69,7 @@ function isCodexSessionStartInput(value: unknown): value is CodexSessionStartInp
 		isRecord(value) &&
 		value.hook_event_name === "SessionStart" &&
 		typeof value.session_id === "string" &&
+		isStringOrNull(value.transcript_path) &&
 		typeof value.cwd === "string" &&
 		typeof value.model === "string" &&
 		typeof value.permission_mode === "string" &&
@@ -70,6 +83,7 @@ function isCodexUserPromptSubmitInput(value: unknown): value is CodexUserPromptS
 		value.hook_event_name === "UserPromptSubmit" &&
 		typeof value.session_id === "string" &&
 		typeof value.turn_id === "string" &&
+		isStringOrNull(value.transcript_path) &&
 		typeof value.cwd === "string" &&
 		typeof value.model === "string" &&
 		typeof value.permission_mode === "string" &&
@@ -83,12 +97,30 @@ function isCodexPostToolUseInput(value: unknown): value is CodexPostToolUseInput
 		value.hook_event_name === "PostToolUse" &&
 		typeof value.session_id === "string" &&
 		typeof value.turn_id === "string" &&
+		isStringOrNull(value.transcript_path) &&
 		typeof value.cwd === "string" &&
 		typeof value.model === "string" &&
 		typeof value.permission_mode === "string" &&
 		typeof value.tool_name === "string" &&
 		typeof value.tool_use_id === "string"
 	);
+}
+
+function isCodexPostCompactInput(value: unknown): value is CodexPostCompactInput {
+	return (
+		isRecord(value) &&
+		value.hook_event_name === "PostCompact" &&
+		typeof value.session_id === "string" &&
+		typeof value.turn_id === "string" &&
+		isStringOrNull(value.transcript_path) &&
+		typeof value.cwd === "string" &&
+		typeof value.model === "string" &&
+		(value.trigger === "manual" || value.trigger === "auto")
+	);
+}
+
+function isStringOrNull(value: unknown): value is string | null {
+	return typeof value === "string" || value === null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

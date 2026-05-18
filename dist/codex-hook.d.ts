@@ -30,11 +30,21 @@ export type CodexPostToolUseInput = {
     tool_response: unknown;
     tool_use_id: string;
 };
+export type CodexPostCompactInput = {
+    session_id: string;
+    turn_id: string;
+    transcript_path: string | null;
+    cwd: string;
+    hook_event_name: "PostCompact";
+    model: string;
+    trigger: "manual" | "auto";
+};
 export interface CodexRulesHookOptions {
     env?: NodeJS.ProcessEnv;
     pluginDataRoot?: string;
 }
 export declare function runSessionStartHook(input: CodexSessionStartInput, options?: CodexRulesHookOptions): Promise<string>;
+export declare function runPostCompactHook(input: CodexPostCompactInput, options?: CodexRulesHookOptions): Promise<string>;
 export declare function runUserPromptSubmitHook(input: CodexUserPromptSubmitInput, options?: CodexRulesHookOptions): Promise<string>;
 export declare function runPostToolUseHook(input: CodexPostToolUseInput, options?: CodexRulesHookOptions): Promise<string>;
 //# sourceMappingURL=codex-hook.d.ts.map

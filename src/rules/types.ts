@@ -126,6 +126,7 @@ export interface SessionState {
 	cwd: string | undefined;
 	staticDedup: Set<string>;
 	dynamicDedup: Map<string, Set<string>>;
+	dynamicTargetFingerprints: Map<string, string>;
 	loadedRules: LoadedRule[];
 	diagnostics: RuleDiagnostic[];
 }

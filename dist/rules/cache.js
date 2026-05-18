@@ -1,6 +1,13 @@
 const DYNAMIC_SESSION_KEY = "__pi-rules-session__";
 export function createSessionState(cwd) {
-    return { cwd, staticDedup: new Set(), dynamicDedup: new Map(), loadedRules: [], diagnostics: [] };
+    return {
+        cwd,
+        staticDedup: new Set(),
+        dynamicDedup: new Map(),
+        dynamicTargetFingerprints: new Map(),
+        loadedRules: [],
+        diagnostics: [],
+    };
 }
 export function staticDedupKey(cwd, rulePath, contentHash) {
     return `${cwd}::${rulePath}::${contentHash}`;
@@ -38,6 +45,7 @@ export function isDynamicInjected(state, rule) {
 export function clearSession(state) {
     state.staticDedup.clear();
     state.dynamicDedup.clear();
+    state.dynamicTargetFingerprints.clear();
     state.loadedRules.length = 0;
     state.diagnostics.length = 0;
 }
