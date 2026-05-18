@@ -248,5 +248,21 @@ function compareResults(baseline, current) {
 			}
 		}
 	}
+	if (baseline.hookFastPath === undefined) {
+		failures.push("missing baseline hookFastPath scenario");
+	} else {
+		if (current.hookFastPath.repeatOutputBytes > baseline.hookFastPath.repeatOutputBytes) {
+			failures.push(
+				`hookFastPath.repeatOutputBytes regressed: ${current.hookFastPath.repeatOutputBytes} > ${baseline.hookFastPath.repeatOutputBytes}`,
+			);
+		}
+
+		const maxMedianRepeatMs = baseline.hookFastPath.medianRepeatMs * 1.5;
+		if (current.hookFastPath.medianRepeatMs > maxMedianRepeatMs) {
+			failures.push(
+				`hookFastPath.medianRepeatMs regressed: ${current.hookFastPath.medianRepeatMs} > ${maxMedianRepeatMs}`,
+			);
+		}
+	}
 	return failures;
 }
