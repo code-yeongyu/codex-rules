@@ -5,7 +5,7 @@ Codex plugin that injects local project rule files into model context through li
 It ports the `pi-rules` rule injector to Codex:
 
 - `SessionStart` and `UserPromptSubmit` load static project instructions once per session.
-- `PostToolUse` watches supported file reads, edits, `apply_patch`, and MCP filesystem payloads, then injects matching file-specific rules as additional context.
+- `PostToolUse` watches Codex `apply_patch` by default, then injects matching file-specific rules as additional context.
 - `PostCompact` clears the per-session injection cache after manual or automatic compaction so relevant rules can be reintroduced into the compacted conversation.
 - Session-level deduplication prevents the same rule from being repeated after it has been injected.
 
@@ -89,6 +89,8 @@ NODE_DEBUG=codex-rules node dist/cli.js hook post-tool-use < fixture.json
 ```
 
 Debug lines go to stderr and hook JSON stays on stdout. The log includes `PostToolUse` phases such as `extract`, `fingerprint`, `load`, `persist`, elapsed `ms`, target counts, pending counts, rule counts, and output bytes. It does not log rule bodies or tool response contents.
+
+The default `PostToolUse` hook matcher is intentionally strict: it matches only Codex's canonical `apply_patch` hook tool name. Read tools, MCP filesystem tools, shell commands, and Claude-style `Write`/`Edit` aliases are not registered by default.
 
 ## Development
 

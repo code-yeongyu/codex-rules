@@ -75,11 +75,31 @@ describe("plugin package metadata", () => {
 			`node "${pluginRoot}/dist/cli.js" hook post-tool-use`,
 			`node "${pluginRoot}/dist/cli.js" hook post-compact`,
 		]);
-		expect(postToolUseMatcher).toContain("mcp__filesystem__read_file");
-		expect(postToolUseMatcher).toContain("apply_patch");
-		expect(postToolUseMatcher).not.toContain("exec_command");
-		expect(postToolUseMatcher).not.toContain("shell_command");
-		expect(postToolUseMatcher).not.toContain("bash");
+		expect(postToolUseMatcher).toBe("^apply_patch$");
+		const postToolUseMatcherRegex = new RegExp(postToolUseMatcher);
+		expect(postToolUseMatcherRegex.test("apply_patch")).toBe(true);
+		expect(
+			[
+				"read",
+				"Read",
+				"read_file",
+				"mcp__filesystem__read_file",
+				"mcp__filesystem__read_multiple_files",
+				"mcp__filesystem__write_file",
+				"mcp__filesystem__edit_file",
+				"write",
+				"Write",
+				"edit",
+				"Edit",
+				"multi_edit",
+				"MultiEdit",
+				"multiedit",
+				"exec_command",
+				"shell_command",
+				"bash",
+				"Bash",
+			].some((toolName) => postToolUseMatcherRegex.test(toolName)),
+		).toBe(false);
 	});
 });
 
