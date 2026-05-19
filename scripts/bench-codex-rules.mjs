@@ -89,11 +89,11 @@ async function measureHookFastPathRun() {
 	const pluginData = mkdtempSync(join(tmpdir(), "codex-rules-hook-data-"));
 	try {
 		mkdirSync(join(projectRoot, "src"), { recursive: true });
-		mkdirSync(join(projectRoot, ".sisyphus", "rules"), { recursive: true });
+		mkdirSync(join(projectRoot, ".omo", "rules"), { recursive: true });
 		writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ name: "bench" }));
 		writeFileSync(join(projectRoot, "src", "app.ts"), "export const app = true;\n");
 		for (let index = 0; index < RULE_COUNT; index += 1) {
-			writeFileSync(join(projectRoot, ".sisyphus", "rules", `rule-${index}.md`), ruleContent(`rule-${index}`));
+			writeFileSync(join(projectRoot, ".omo", "rules", `rule-${index}.md`), ruleContent(`rule-${index}`));
 		}
 
 		const input = {
@@ -112,12 +112,12 @@ async function measureHookFastPathRun() {
 
 		await runPostToolUseHook(input, {
 			pluginDataRoot: pluginData,
-			env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+			env: { CODEX_RULES_ENABLED_SOURCES: ".omo/rules" },
 		});
 		const start = process.hrtime.bigint();
 		const repeatOutput = await runPostToolUseHook(input, {
 			pluginDataRoot: pluginData,
-			env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+			env: { CODEX_RULES_ENABLED_SOURCES: ".omo/rules" },
 		});
 		return {
 			repeatDurationMs: Number(process.hrtime.bigint() - start) / 1_000_000,
@@ -155,7 +155,7 @@ function measureRun(targetPaths) {
 	const projectRoot = mkdtempSync(join(tmpdir(), "codex-rules-bench-"));
 	try {
 		const candidates = makeCandidates(projectRoot);
-		mkdirSync(join(projectRoot, ".sisyphus", "rules"), { recursive: true });
+		mkdirSync(join(projectRoot, ".omo", "rules"), { recursive: true });
 		for (const candidate of candidates) {
 			writeFileSync(candidate.path, "");
 		}
@@ -195,13 +195,13 @@ function distinctTargets(projectRoot) {
 
 function makeCandidates(projectRoot) {
 	return Array.from({ length: RULE_COUNT }, (_, index) => ({
-		path: join(projectRoot, ".sisyphus", "rules", `rule-${index}.md`),
-		realPath: join(projectRoot, ".sisyphus", "rules", `rule-${index}.md`),
-		source: ".sisyphus/rules",
+		path: join(projectRoot, ".omo", "rules", `rule-${index}.md`),
+		realPath: join(projectRoot, ".omo", "rules", `rule-${index}.md`),
+		source: ".omo/rules",
 		distance: 0,
 		isGlobal: false,
 		isSingleFile: false,
-		relativePath: `.sisyphus/rules/rule-${index}.md`,
+		relativePath: `.omo/rules/rule-${index}.md`,
 	}));
 }
 

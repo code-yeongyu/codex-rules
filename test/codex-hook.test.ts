@@ -55,11 +55,11 @@ function runHookCli(input: string, subcommand = "post-tool-use", env: NodeJS.Pro
 
 const tempDirectories: string[] = [];
 const PROJECT_ONLY_ENV = {
-	CODEX_RULES_ENABLED_SOURCES: "AGENTS.md,.sisyphus/rules",
+	CODEX_RULES_ENABLED_SOURCES: "AGENTS.md,.omo/rules",
 };
 
 const RULES_ONLY_ENV = {
-	CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules",
+	CODEX_RULES_ENABLED_SOURCES: ".omo/rules",
 };
 
 afterEach(() => {
@@ -74,9 +74,9 @@ function makeTempProject(): { root: string; pluginData: string } {
 	tempDirectories.push(root, pluginData);
 	writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "fixture" }));
 	writeFileSync(path.join(root, "AGENTS.md"), "Always wear safety goggles when refactoring.");
-	mkdirSync(path.join(root, ".sisyphus", "rules"), { recursive: true });
+	mkdirSync(path.join(root, ".omo", "rules"), { recursive: true });
 	writeFileSync(
-		path.join(root, ".sisyphus", "rules", "typescript.md"),
+		path.join(root, ".omo", "rules", "typescript.md"),
 		[
 			"---",
 			"description: TypeScript",
@@ -161,7 +161,7 @@ function readSessionCache(pluginData: string): SessionCache {
 
 function writeTypeScriptRule(root: string, globExpression: string, body: string): void {
 	writeFileSync(
-		path.join(root, ".sisyphus", "rules", "typescript.md"),
+		path.join(root, ".omo", "rules", "typescript.md"),
 		["---", "description: TypeScript", `globs: ${globExpression}`, "---", "", body].join("\n"),
 	);
 }

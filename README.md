@@ -20,7 +20,7 @@ Project-level sources:
 - `AGENTS.md`
 - `CLAUDE.md`
 - `CONTEXT.md`
-- `.sisyphus/rules/**/*.md`
+- `.omo/rules/**/*.md`
 - `.claude/rules/**/*.md`
 - `.cursor/rules/**/*.md`
 - `.github/instructions/**/*.md`

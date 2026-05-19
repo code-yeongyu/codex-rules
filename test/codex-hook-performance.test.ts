@@ -21,14 +21,14 @@ function makeTempProject(ruleCount: number): { root: string; pluginData: string;
 	tempDirectories.push(root, pluginData);
 
 	fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "fixture" }));
-	fs.mkdirSync(path.join(root, ".sisyphus", "rules"), { recursive: true });
+	fs.mkdirSync(path.join(root, ".omo", "rules"), { recursive: true });
 	fs.mkdirSync(path.join(root, "src"), { recursive: true });
 	const targetPath = path.join(root, "src", "app.ts");
 	fs.writeFileSync(targetPath, "export const app = true;\n");
 
 	for (let index = 0; index < ruleCount; index += 1) {
 		fs.writeFileSync(
-			path.join(root, ".sisyphus", "rules", `rule-${index}.md`),
+			path.join(root, ".omo", "rules", `rule-${index}.md`),
 			["---", 'globs: "**/*.ts"', "---", "", `Rule ${index}`].join("\n"),
 		);
 	}
@@ -53,7 +53,7 @@ function postToolUseInput(root: string, filePath: string): CodexPostToolUseInput
 }
 
 function isProjectRuleRead(filePath: unknown): boolean {
-	return String(filePath).includes(`${path.sep}.sisyphus${path.sep}rules${path.sep}`);
+	return String(filePath).includes(`${path.sep}.omo${path.sep}rules${path.sep}`);
 }
 
 describe("codex rules hook performance", () => {
@@ -77,13 +77,13 @@ describe("codex rules hook performance", () => {
 			// when
 			const firstOutput = await runPostToolUseHook(postToolUseInput(root, targetPath), {
 				pluginDataRoot: pluginData,
-				env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+				env: { CODEX_RULES_ENABLED_SOURCES: ".omo/rules" },
 			});
 			const firstRunRuleFileReads = ruleFileReads;
 			ruleFileReads = 0;
 			const secondOutput = await runPostToolUseHook(postToolUseInput(root, targetPath), {
 				pluginDataRoot: pluginData,
-				env: { CODEX_RULES_ENABLED_SOURCES: ".sisyphus/rules" },
+				env: { CODEX_RULES_ENABLED_SOURCES: ".omo/rules" },
 			});
 
 			// then

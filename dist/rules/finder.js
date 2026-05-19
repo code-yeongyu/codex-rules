@@ -194,7 +194,7 @@ function toRelativePath(rootDirectory, filePath) {
 function toProjectRuleSource(parentDirectory, subDirectory) {
     const source = `${parentDirectory}/${subDirectory}`;
     switch (source) {
-        case ".sisyphus/rules":
+        case ".omo/rules":
         case ".claude/rules":
         case ".cursor/rules":
         case ".github/instructions":
@@ -217,7 +217,7 @@ function toProjectSingleFileSource(ruleFile) {
 function toUserHomeRuleSource(ruleSubdir) {
     const source = `~/${ruleSubdir}`;
     switch (source) {
-        case "~/.sisyphus/rules":
+        case "~/.omo/rules":
         case "~/.opencode/rules":
         case "~/.claude/rules":
             return source;

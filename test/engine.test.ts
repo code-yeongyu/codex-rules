@@ -9,13 +9,13 @@ const projectRoot = "/tmp/codex-rules-engine";
 
 function makeCandidate(): RuleCandidate {
 	return {
-		path: join(projectRoot, ".sisyphus", "rules", "typescript.md"),
-		realPath: join(projectRoot, ".sisyphus", "rules", "typescript.md"),
-		source: ".sisyphus/rules",
+		path: join(projectRoot, ".omo", "rules", "typescript.md"),
+		realPath: join(projectRoot, ".omo", "rules", "typescript.md"),
+		source: ".omo/rules",
 		distance: 0,
 		isGlobal: false,
 		isSingleFile: false,
-		relativePath: ".sisyphus/rules/typescript.md",
+		relativePath: ".omo/rules/typescript.md",
 	};
 }
 

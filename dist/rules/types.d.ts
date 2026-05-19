@@ -70,7 +70,7 @@ export interface LoadedRule extends RuleCandidate {
 /**
  * Source identifier for rule files. Used for deterministic ordering and display.
  */
-export type RuleSource = ".sisyphus/rules" | ".claude/rules" | ".cursor/rules" | ".github/instructions" | ".github/copilot-instructions.md" | "AGENTS.md" | "CLAUDE.md" | "CONTEXT.md" | "~/.sisyphus/rules" | "~/.opencode/rules" | "~/.claude/rules" | "~/.config/opencode/AGENTS.md" | "~/.claude/CLAUDE.md";
+export type RuleSource = ".omo/rules" | ".claude/rules" | ".cursor/rules" | ".github/instructions" | ".github/copilot-instructions.md" | "AGENTS.md" | "CLAUDE.md" | "CONTEXT.md" | "~/.omo/rules" | "~/.opencode/rules" | "~/.claude/rules" | "~/.config/opencode/AGENTS.md" | "~/.claude/CLAUDE.md";
 /**
  * Why a candidate matched the target file. Surfaced in the injection block so
  * the model can attribute its behavior to a specific rule.

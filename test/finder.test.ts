@@ -18,14 +18,14 @@ function makeProject(): { projectRoot: string; homeRoot: string; targetPath: str
 	const projectRoot = mkdtempSync(join(tmpdir(), "codex-rules-finder-project-"));
 	const homeRoot = mkdtempSync(join(tmpdir(), "codex-rules-finder-home-"));
 	tempDirectories.push(projectRoot, homeRoot);
-	mkdirSync(join(projectRoot, "src", ".sisyphus", "rules"), { recursive: true });
-	mkdirSync(join(projectRoot, ".sisyphus", "rules"), { recursive: true });
+	mkdirSync(join(projectRoot, "src", ".omo", "rules"), { recursive: true });
+	mkdirSync(join(projectRoot, ".omo", "rules"), { recursive: true });
 	mkdirSync(join(homeRoot, ".opencode", "rules"), { recursive: true });
 	mkdirSync(join(homeRoot, ".config", "opencode"), { recursive: true });
 	writeFileSync(join(projectRoot, "package.json"), JSON.stringify({ name: "fixture" }));
 	writeFileSync(join(projectRoot, "AGENTS.md"), "Project rule\n");
-	writeFileSync(join(projectRoot, "src", ".sisyphus", "rules", "local.md"), "Local rule\n");
-	writeFileSync(join(projectRoot, ".sisyphus", "rules", "root.md"), "Root rule\n");
+	writeFileSync(join(projectRoot, "src", ".omo", "rules", "local.md"), "Local rule\n");
+	writeFileSync(join(projectRoot, ".omo", "rules", "root.md"), "Root rule\n");
 	writeFileSync(join(homeRoot, ".opencode", "rules", "global.md"), "Global rule\n");
 	writeFileSync(join(homeRoot, ".config", "opencode", "AGENTS.md"), "Home rule\n");
 	const targetPath = join(projectRoot, "src", "app.ts");
@@ -47,8 +47,8 @@ describe("findRuleCandidates", () => {
 
 		// then
 		expect(candidates.map(candidateSummary)).toEqual([
-			".sisyphus/rules:0:src/.sisyphus/rules/local.md",
-			".sisyphus/rules:1:.sisyphus/rules/root.md",
+			".omo/rules:0:src/.omo/rules/local.md",
+			".omo/rules:1:.omo/rules/root.md",
 			"AGENTS.md:1:AGENTS.md",
 			"~/.opencode/rules:9999:.opencode/rules/global.md",
 			"~/.config/opencode/AGENTS.md:9999:.config/opencode/AGENTS.md",
@@ -64,7 +64,7 @@ describe("findRuleCandidates", () => {
 			projectRoot,
 			targetFile: targetPath,
 			homeDir: homeRoot,
-			disabledSources: new Set([".sisyphus/rules", "~/.opencode/rules"]),
+			disabledSources: new Set([".omo/rules", "~/.opencode/rules"]),
 		});
 
 		// then
@@ -88,8 +88,8 @@ describe("findRuleCandidates", () => {
 
 		// then
 		expect(candidates.map(candidateSummary)).toEqual([
-			".sisyphus/rules:0:src/.sisyphus/rules/local.md",
-			".sisyphus/rules:1:.sisyphus/rules/root.md",
+			".omo/rules:0:src/.omo/rules/local.md",
+			".omo/rules:1:.omo/rules/root.md",
 			"AGENTS.md:1:AGENTS.md",
 		]);
 	});
