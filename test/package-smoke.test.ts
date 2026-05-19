@@ -17,6 +17,7 @@ type HookCommand = {
 };
 
 type HookEntry = {
+	readonly matcher?: string;
 	readonly hooks: readonly HookCommand[];
 };
 
@@ -59,6 +60,7 @@ describe("plugin package metadata", () => {
 			hookConfig["PostToolUse"]?.[0]?.hooks[0]?.command,
 			hookConfig["PostCompact"]?.[0]?.hooks[0]?.command,
 		];
+		const postToolUseMatcher = hookConfig["PostToolUse"]?.[0]?.matcher ?? "";
 
 		// then
 		expect(packageJson.type).toBe("module");
@@ -73,6 +75,11 @@ describe("plugin package metadata", () => {
 			`node "${pluginRoot}/dist/cli.js" hook post-tool-use`,
 			`node "${pluginRoot}/dist/cli.js" hook post-compact`,
 		]);
+		expect(postToolUseMatcher).toContain("mcp__filesystem__read_file");
+		expect(postToolUseMatcher).toContain("apply_patch");
+		expect(postToolUseMatcher).not.toContain("exec_command");
+		expect(postToolUseMatcher).not.toContain("shell_command");
+		expect(postToolUseMatcher).not.toContain("bash");
 	});
 });
 

@@ -2,6 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 
 import { configFromEnvironment } from "./config.js";
+import { createHookDebugTimer } from "./debug-log.js";
 import { clearSessionState, hydrateEngineState, persistEngineState, sessionCachePath } from "./persistent-cache.js";
 import { SOURCE_PRIORITY } from "./rules/constants.js";
 import { createEngine } from "./rules/engine.js";
@@ -101,26 +102,44 @@ export async function runPostToolUseHook(
 	input: CodexPostToolUseInput,
 	options: CodexRulesHookOptions = {},
 ): Promise<string> {
+	const debugTimer = createHookDebugTimer("PostToolUse");
 	const config = configFromEnvironment(options.env);
+	debugTimer.lap("config", { disabled: config.disabled, mode: config.mode });
 	if (config.disabled || config.mode === "off" || config.mode === "static") {
+		debugTimer.done({ outputBytes: 0, reason: "disabled" });
 		return "";
 	}
 
 	const targetPaths = extractCodexToolPaths(input, input.cwd);
+	debugTimer.lap("extract", {
+		targets: targetPaths.length,
+		uniqueTargets: uniqueStrings(targetPaths).length,
+		tool: input.tool_name,
+	});
 	const firstTargetPath = targetPaths[0];
 	if (firstTargetPath === undefined) {
+		debugTimer.done({ outputBytes: 0, reason: "no-target" });
 		return "";
 	}
 
 	const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
 	const engine = createRulesEngine(options);
 	hydrateEngineState(engine, cachePath);
+	debugTimer.lap("hydrate", {
+		dynamicDedupScopes: engine.state.dynamicDedup.size,
+		dynamicTargetFingerprints: engine.state.dynamicTargetFingerprints.size,
+		staticDedup: engine.state.staticDedup.size,
+	});
 	const dynamicTargetFingerprints = fingerprintDynamicTargets(input.cwd, targetPaths, config);
+	debugTimer.lap("fingerprint", { fingerprints: dynamicTargetFingerprints.length });
 	const pendingTargetFingerprints = dynamicTargetFingerprints.filter(
 		(target) => engine.state.dynamicTargetFingerprints.get(target.cacheKey) !== target.fingerprint,
 	);
+	debugTimer.lap("pending", { pending: pendingTargetFingerprints.length });
 	if (pendingTargetFingerprints.length === 0) {
 		persistEngineState(engine, cachePath);
+		debugTimer.lap("persist", { reason: "no-pending" });
+		debugTimer.done({ outputBytes: 0, reason: "no-pending" });
 		return "";
 	}
 
@@ -128,22 +147,30 @@ export async function runPostToolUseHook(
 		input.cwd,
 		pendingTargetFingerprints.map((target) => target.targetPath),
 	);
+	debugTimer.lap("load", { diagnostics: loaded.diagnostics.length, loadedRules: loaded.rules.length });
 	const rules = loaded.rules.filter((rule) => !engine.isStaticInjected(rule) && !engine.isDynamicInjected(rule));
+	debugTimer.lap("filter", { rules: rules.length });
 	for (const target of pendingTargetFingerprints) {
 		engine.state.dynamicTargetFingerprints.set(target.cacheKey, target.fingerprint);
 	}
 	if (rules.length === 0) {
 		persistEngineState(engine, cachePath);
+		debugTimer.lap("persist", { reason: "no-rules" });
+		debugTimer.done({ outputBytes: 0, reason: "no-rules" });
 		return "";
 	}
 
 	const firstPendingTargetPath = pendingTargetFingerprints[0]?.targetPath ?? firstTargetPath;
 	const block = engine.formatDynamic(rules, displayPath(input.cwd, firstPendingTargetPath));
+	debugTimer.lap("format", { blockChars: block.length, rules: rules.length });
 	for (const rule of rules) {
 		engine.markDynamicInjected(rule);
 	}
 	persistEngineState(engine, cachePath);
-	return formatAdditionalContextOutput("PostToolUse", block);
+	debugTimer.lap("persist", { reason: "emit" });
+	const output = formatAdditionalContextOutput("PostToolUse", block);
+	debugTimer.done({ outputBytes: Buffer.byteLength(output), reason: "emit" });
+	return output;
 }
 
 function runStaticInjection(

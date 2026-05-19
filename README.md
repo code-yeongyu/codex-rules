@@ -5,7 +5,7 @@ Codex plugin that injects local project rule files into model context through li
 It ports the `pi-rules` rule injector to Codex:
 
 - `SessionStart` and `UserPromptSubmit` load static project instructions once per session.
-- `PostToolUse` watches supported file reads, edits, `apply_patch`, MCP filesystem payloads, and shell command file references, then injects matching file-specific rules as additional context.
+- `PostToolUse` watches supported file reads, edits, `apply_patch`, and MCP filesystem payloads, then injects matching file-specific rules as additional context.
 - `PostCompact` clears the per-session injection cache after manual or automatic compaction so relevant rules can be reintroduced into the compacted conversation.
 - Session-level deduplication prevents the same rule from being repeated after it has been injected.
 
@@ -80,6 +80,16 @@ Use `CODEX_RULES_*` environment variables:
 
 For migration from `pi-rules`, equivalent `PI_RULES_*` variables are accepted as fallbacks.
 
+## Debugging
+
+Enable hook phase timing with `NODE_DEBUG=codex-rules`:
+
+```bash
+NODE_DEBUG=codex-rules node dist/cli.js hook post-tool-use < fixture.json
+```
+
+Debug lines go to stderr and hook JSON stays on stdout. The log includes `PostToolUse` phases such as `extract`, `fingerprint`, `load`, `persist`, elapsed `ms`, target counts, pending counts, rule counts, and output bytes. It does not log rule bodies or tool response contents.
+
 ## Development
 
 ```bash
@@ -89,6 +99,14 @@ npm run check
 npm run typecheck
 npm pack --dry-run
 ```
+
+Performance smoke test:
+
+```bash
+npm run bench
+```
+
+Benchmark timings depend on the local machine. Use the relative counters and repeat-output checks when comparing runs.
 
 Hook smoke test:
 

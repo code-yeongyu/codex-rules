@@ -29,9 +29,10 @@ type SessionCache = {
 
 const CLI_PATH = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
-function runHookCli(input: string, subcommand = "post-tool-use"): Promise<CliResult> {
+function runHookCli(input: string, subcommand = "post-tool-use", env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(process.execPath, [CLI_PATH, "hook", subcommand], {
+			env: { ...process.env, ...env },
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 		let stdout = "";
@@ -466,6 +467,28 @@ describe("codex rules hooks", () => {
 			stdout: "",
 			stderr: "",
 		});
+	});
+
+	it("#given debug timing enabled #when PostToolUse hook CLI runs #then phase logs go to stderr only", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const input = `${JSON.stringify(postToolUseInput(root, path.join(root, "src", "app.ts")))}\n`;
+
+		// when
+		const result = await runHookCli(input, "post-tool-use", {
+			NODE_DEBUG: "codex-rules",
+			PLUGIN_DATA: pluginData,
+		});
+
+		// then
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("hookSpecificOutput");
+		expect(result.stderr).toContain("PostToolUse");
+		expect(result.stderr).toContain("extract");
+		expect(result.stderr).toContain("fingerprint");
+		expect(result.stderr).toContain("load");
+		expect(result.stderr).toContain("persist");
+		expect(result.stderr).toContain("ms");
 	});
 
 	it("#given malformed post-compact stdin #when hook CLI runs #then it no-ops without stderr", async () => {

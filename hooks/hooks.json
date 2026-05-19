@@ -26,7 +26,7 @@
 		],
 		"PostToolUse": [
 			{
-				"matcher": "^(apply_patch|read|Read|read_file|mcp__filesystem__read_file|mcp__filesystem__read_multiple_files|mcp__filesystem__write_file|mcp__filesystem__edit_file|write|Write|edit|Edit|multi_edit|MultiEdit|multiedit|bash|Bash|shell_command|exec_command)$",
+				"matcher": "^(apply_patch|read|Read|read_file|mcp__filesystem__read_file|mcp__filesystem__read_multiple_files|mcp__filesystem__write_file|mcp__filesystem__edit_file|write|Write|edit|Edit|multi_edit|MultiEdit|multiedit)$",
 				"hooks": [
 					{
 						"type": "command",
