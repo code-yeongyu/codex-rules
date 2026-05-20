@@ -30,6 +30,12 @@ export function persistEngineState(engine, cachePath) {
 export function clearSessionState(cachePath) {
     rmSync(cachePath, { force: true });
 }
+export function markSessionCompacted(cachePath) {
+    writeSessionState(cachePath, { ...emptyState(), compacted: true });
+}
+export function wasSessionCompacted(cachePath) {
+    return readSessionState(cachePath).compacted === true;
+}
 export function sessionCachePath(sessionId, pluginDataRoot) {
     const root = pluginDataRoot ?? process.env["PLUGIN_DATA"] ?? join(homedir(), ".codex", "codex-rules");
     return join(root, "sessions", `${safePathSegment(sessionId)}.json`);
@@ -62,11 +68,13 @@ function isSerializedSessionState(value) {
     const staticDedup = value["staticDedup"];
     const dynamicDedup = value["dynamicDedup"];
     const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
+    const compacted = value["compacted"];
     return (staticDedup.every((item) => typeof item === "string") &&
         Object.values(dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")) &&
         (dynamicTargetFingerprints === undefined ||
             (isRecord(dynamicTargetFingerprints) &&
-                Object.entries(dynamicTargetFingerprints).every(([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string"))));
+                Object.entries(dynamicTargetFingerprints).every(([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string"))) &&
+        (compacted === undefined || typeof compacted === "boolean"));
 }
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);

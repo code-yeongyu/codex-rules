@@ -8,6 +8,7 @@ interface SerializedSessionState {
 	staticDedup: string[];
 	dynamicDedup: Record<string, string[]>;
 	dynamicTargetFingerprints?: Record<string, string>;
+	compacted?: boolean;
 }
 
 export function hydrateEngineState(engine: Engine, cachePath: string): void {
@@ -42,6 +43,14 @@ export function persistEngineState(engine: Engine, cachePath: string): void {
 
 export function clearSessionState(cachePath: string): void {
 	rmSync(cachePath, { force: true });
+}
+
+export function markSessionCompacted(cachePath: string): void {
+	writeSessionState(cachePath, { ...emptyState(), compacted: true });
+}
+
+export function wasSessionCompacted(cachePath: string): boolean {
+	return readSessionState(cachePath).compacted === true;
 }
 
 export function sessionCachePath(sessionId: string, pluginDataRoot: string | undefined): string {
@@ -79,6 +88,7 @@ function isSerializedSessionState(value: unknown): value is SerializedSessionSta
 	const staticDedup = value["staticDedup"];
 	const dynamicDedup = value["dynamicDedup"];
 	const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
+	const compacted = value["compacted"];
 	return (
 		staticDedup.every((item) => typeof item === "string") &&
 		Object.values(dynamicDedup).every(
@@ -88,7 +98,8 @@ function isSerializedSessionState(value: unknown): value is SerializedSessionSta
 			(isRecord(dynamicTargetFingerprints) &&
 				Object.entries(dynamicTargetFingerprints).every(
 					([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string",
-				)))
+				))) &&
+		(compacted === undefined || typeof compacted === "boolean")
 	);
 }
 
