@@ -2,7 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { configFromEnvironment } from "./config.js";
 import { createHookDebugTimer } from "./debug-log.js";
-import { clearSessionState, hydrateEngineState, persistEngineState, sessionCachePath } from "./persistent-cache.js";
+import { clearSessionState, hydrateEngineState, markSessionCompacted, persistEngineState, sessionCachePath, wasSessionCompacted, } from "./persistent-cache.js";
 import { SOURCE_PRIORITY } from "./rules/constants.js";
 import { createEngine } from "./rules/engine.js";
 import { createRuleDiscoveryCache, findRuleCandidates } from "./rules/finder.js";
@@ -12,18 +12,21 @@ import { findProjectRoot } from "./rules/project-root.js";
 import { extractCodexToolPaths } from "./tool-paths.js";
 export async function runSessionStartHook(input, options = {}) {
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-    if (input.source !== "resume") {
+    const wasCompacted = wasSessionCompacted(cachePath);
+    if (input.source !== "resume" && !wasCompacted) {
         clearSessionState(cachePath);
     }
-    return runStaticInjection(input.cwd, "SessionStart", cachePath, options);
+    const transcriptPath = input.source === "clear" || wasCompacted ? null : input.transcript_path;
+    return runStaticInjection(input.cwd, transcriptPath, "SessionStart", cachePath, options);
 }
 export async function runPostCompactHook(input, options = {}) {
-    clearSessionState(sessionCachePath(input.session_id, options.pluginDataRoot));
+    markSessionCompacted(sessionCachePath(input.session_id, options.pluginDataRoot));
     return "";
 }
 export async function runUserPromptSubmitHook(input, options = {}) {
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-    return runStaticInjection(input.cwd, "UserPromptSubmit", cachePath, options);
+    const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
+    return runStaticInjection(input.cwd, transcriptPath, "UserPromptSubmit", cachePath, options);
 }
 export async function runPostToolUseHook(input, options = {}) {
     const debugTimer = createHookDebugTimer("PostToolUse");
@@ -45,6 +48,7 @@ export async function runPostToolUseHook(input, options = {}) {
         return "";
     }
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
+    const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
     const engine = createRulesEngine(options);
     hydrateEngineState(engine, cachePath);
     debugTimer.lap("hydrate", {
@@ -64,7 +68,9 @@ export async function runPostToolUseHook(input, options = {}) {
     }
     const loaded = engine.loadDynamicRules(input.cwd, pendingTargetFingerprints.map((target) => target.targetPath));
     debugTimer.lap("load", { diagnostics: loaded.diagnostics.length, loadedRules: loaded.rules.length });
-    const rules = loaded.rules.filter((rule) => !engine.isStaticInjected(rule) && !engine.isDynamicInjected(rule));
+    const rules = filterRulesAlreadyInTranscript(loaded.rules.filter((rule) => !engine.isStaticInjected(rule) && !engine.isDynamicInjected(rule)), transcriptPath, (rule) => {
+        engine.markDynamicInjected(rule);
+    });
     debugTimer.lap("filter", { rules: rules.length });
     for (const target of pendingTargetFingerprints) {
         engine.state.dynamicTargetFingerprints.set(target.cacheKey, target.fingerprint);
@@ -87,7 +93,7 @@ export async function runPostToolUseHook(input, options = {}) {
     debugTimer.done({ outputBytes: Buffer.byteLength(output), reason: "emit" });
     return output;
 }
-function runStaticInjection(cwd, eventName, cachePath, options) {
+function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options) {
     const config = configFromEnvironment(options.env);
     if (config.disabled || config.mode === "off" || config.mode === "dynamic") {
         return "";
@@ -96,7 +102,9 @@ function runStaticInjection(cwd, eventName, cachePath, options) {
     hydrateEngineState(engine, cachePath);
     engine.state.cwd = cwd;
     const loaded = engine.loadStaticRules(cwd);
-    const rules = loaded.rules.filter((rule) => !engine.isStaticInjected(rule));
+    const rules = filterRulesAlreadyInTranscript(loaded.rules.filter((rule) => !engine.isStaticInjected(rule)), transcriptPath, (rule) => {
+        engine.markStaticInjected(rule);
+    });
     if (rules.length === 0) {
         persistEngineState(engine, cachePath);
         return "";
@@ -107,6 +115,79 @@ function runStaticInjection(cwd, eventName, cachePath, options) {
     }
     persistEngineState(engine, cachePath);
     return formatAdditionalContextOutput(eventName, block);
+}
+function filterRulesAlreadyInTranscript(rules, transcriptPath, markInjected) {
+    if (rules.length === 0 || transcriptPath === null) {
+        return [...rules];
+    }
+    const transcriptText = readTranscriptSearchText(transcriptPath);
+    if (transcriptText === null) {
+        return [...rules];
+    }
+    const pendingRules = [];
+    for (const rule of rules) {
+        if (isRuleAlreadyInTranscript(rule, transcriptText)) {
+            markInjected(rule);
+            continue;
+        }
+        pendingRules.push(rule);
+    }
+    return pendingRules;
+}
+function isRuleAlreadyInTranscript(rule, transcriptText) {
+    const bodyNeedle = rule.body.trim().slice(0, 2_000);
+    if (bodyNeedle.length === 0 || !transcriptText.includes(bodyNeedle)) {
+        return false;
+    }
+    const markers = [
+        `Instructions from: ${rule.path}`,
+        `Instructions from: ${rule.realPath}`,
+        rule.relativePath.length === 0 ? null : rule.relativePath,
+    ].filter((marker) => marker !== null);
+    return markers.some((marker) => transcriptText.includes(marker));
+}
+function readTranscriptSearchText(transcriptPath) {
+    try {
+        const rawTranscript = readFileSync(transcriptPath, "utf8");
+        return [rawTranscript, ...collectJsonLineStrings(rawTranscript)].join("\n");
+    }
+    catch {
+        return null;
+    }
+}
+function collectJsonLineStrings(rawTranscript) {
+    const values = [];
+    for (const line of rawTranscript.split(/\r?\n/)) {
+        if (line.trim().length === 0) {
+            continue;
+        }
+        try {
+            const parsed = JSON.parse(line);
+            collectStrings(parsed, values);
+        }
+        catch {
+            // Non-JSON transcript lines are still covered by the raw transcript text.
+        }
+    }
+    return values;
+}
+function collectStrings(value, output) {
+    if (typeof value === "string") {
+        output.push(value);
+        return;
+    }
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            collectStrings(item, output);
+        }
+        return;
+    }
+    if (typeof value !== "object" || value === null) {
+        return;
+    }
+    for (const item of Object.values(value)) {
+        collectStrings(item, output);
+    }
 }
 function createRulesEngine(options) {
     const config = configFromEnvironment(options.env);

@@ -147,6 +147,12 @@ function parseHookOutput(output: string): {
 	};
 }
 
+function writeTranscriptWithContext(root: string, additionalContext: string): string {
+	const transcriptPath = path.join(root, "transcript.jsonl");
+	writeFileSync(transcriptPath, `${JSON.stringify({ hookSpecificOutput: { additionalContext } })}\n`);
+	return transcriptPath;
+}
+
 function occurrenceCount(value: string, search: string): number {
 	return value.split(search).length - 1;
 }
@@ -231,6 +237,28 @@ describe("codex rules hooks", () => {
 		);
 	});
 
+	it("#given static context remains in transcript but cache is missing #when SessionStart runs #then it emits no duplicate context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const firstOutput = await runSessionStartHook(sessionStartInput(root), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const firstContext = parseHookOutput(firstOutput).hookSpecificOutput?.additionalContext ?? "";
+		const transcriptPath = writeTranscriptWithContext(root, firstContext);
+		rmSync(sessionCacheFilePath(pluginData), { force: true });
+
+		// when
+		const output = await runSessionStartHook(
+			{ ...sessionStartInput(root), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(output).toBe("");
+		expect(readSessionCache(pluginData).staticDedup).toHaveLength(1);
+	});
+
 	it("#given read-file tool result #when PostToolUse runs #then emits matching dynamic rule context", async () => {
 		// given
 		const { root, pluginData } = makeTempProject();
@@ -302,6 +330,29 @@ describe("codex rules hooks", () => {
 		expect(readSessionCache(pluginData).dynamicTargetFingerprints).toEqual(cachedState.dynamicTargetFingerprints);
 	});
 
+	it("#given dynamic context remains in transcript but cache is missing #when PostToolUse repeats #then it emits no duplicate context", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const input = postToolUseInput(root, filePath);
+		const firstOutput = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+		const firstContext = parseHookOutput(firstOutput).hookSpecificOutput?.additionalContext ?? "";
+		const transcriptPath = writeTranscriptWithContext(root, firstContext);
+		rmSync(sessionCacheFilePath(pluginData), { force: true });
+
+		// when
+		const output = await runPostToolUseHook(
+			{ ...input, transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		const cachedState = readSessionCache(pluginData);
+		expect(output).toBe("");
+		expect(Object.values(cachedState.dynamicDedup ?? {}).flat()).toHaveLength(2);
+		expect(Object.keys(cachedState.dynamicTargetFingerprints ?? {})).toHaveLength(1);
+	});
+
 	it("#given cached target in one session #when another session reads it #then PostToolUse rechecks independently", async () => {
 		// given
 		const { root, pluginData } = makeTempProject();
@@ -340,12 +391,25 @@ describe("codex rules hooks", () => {
 		const { root, pluginData } = makeTempProject();
 		const filePath = path.join(root, "src", "app.ts");
 		const input = postToolUseInput(root, filePath);
-		await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
-		expect(await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV })).toBe("");
+		const firstOutput = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+		const firstContext = parseHookOutput(firstOutput).hookSpecificOutput?.additionalContext ?? "";
+		const transcriptPath = writeTranscriptWithContext(root, firstContext);
+		expect(
+			await runPostToolUseHook(
+				{ ...input, transcript_path: transcriptPath },
+				{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+			),
+		).toBe("");
 
 		// when
-		const compactOutput = await runPostCompactHook(postCompactInput(root), { pluginDataRoot: pluginData });
-		const output = await runPostToolUseHook(input, { pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV });
+		const compactOutput = await runPostCompactHook(
+			{ ...postCompactInput(root), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData },
+		);
+		const output = await runPostToolUseHook(
+			{ ...input, transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
 
 		// then
 		expect(compactOutput).toBe("");
