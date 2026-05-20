@@ -5,11 +5,12 @@ import { configFromEnvironment } from "./config.js";
 import { createHookDebugTimer } from "./debug-log.js";
 import {
 	clearSessionState,
+	hasPostCompactPending,
 	hydrateEngineState,
+	isPostCompactPending,
 	markSessionCompacted,
 	persistEngineState,
 	sessionCachePath,
-	wasSessionCompacted,
 } from "./persistent-cache.js";
 import { SOURCE_PRIORITY } from "./rules/constants.js";
 import { createEngine } from "./rules/engine.js";
@@ -83,12 +84,21 @@ export async function runSessionStartHook(
 	options: CodexRulesHookOptions = {},
 ): Promise<string> {
 	const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-	const wasCompacted = wasSessionCompacted(cachePath);
-	if (input.source !== "resume" && !wasCompacted) {
+	if (input.source === "clear") {
+		clearSessionState(cachePath);
+	} else if (input.source !== "resume" && !hasPostCompactPending(cachePath)) {
 		clearSessionState(cachePath);
 	}
-	const transcriptPath = input.source === "clear" || wasCompacted ? null : input.transcript_path;
-	return runStaticInjection(input.cwd, transcriptPath, "SessionStart", cachePath, options);
+	const postCompactPending = input.source !== "clear" && isPostCompactPending(cachePath, "static");
+	const transcriptPath = input.source === "clear" || postCompactPending ? null : input.transcript_path;
+	return runStaticInjection(
+		input.cwd,
+		transcriptPath,
+		"SessionStart",
+		cachePath,
+		options,
+		postCompactPending ? "static" : undefined,
+	);
 }
 
 export async function runPostCompactHook(
@@ -104,8 +114,16 @@ export async function runUserPromptSubmitHook(
 	options: CodexRulesHookOptions = {},
 ): Promise<string> {
 	const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-	const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
-	return runStaticInjection(input.cwd, transcriptPath, "UserPromptSubmit", cachePath, options);
+	const postCompactPending = isPostCompactPending(cachePath, "static");
+	const transcriptPath = postCompactPending ? null : input.transcript_path;
+	return runStaticInjection(
+		input.cwd,
+		transcriptPath,
+		"UserPromptSubmit",
+		cachePath,
+		options,
+		postCompactPending ? "static" : undefined,
+	);
 }
 
 export async function runPostToolUseHook(
@@ -133,7 +151,8 @@ export async function runPostToolUseHook(
 	}
 
 	const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-	const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
+	const postCompactPending = isPostCompactPending(cachePath, "dynamic");
+	const transcriptPath = postCompactPending ? null : input.transcript_path;
 	const engine = createRulesEngine(options);
 	hydrateEngineState(engine, cachePath);
 	debugTimer.lap("hydrate", {
@@ -148,7 +167,7 @@ export async function runPostToolUseHook(
 	);
 	debugTimer.lap("pending", { pending: pendingTargetFingerprints.length });
 	if (pendingTargetFingerprints.length === 0) {
-		persistEngineState(engine, cachePath);
+		persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
 		debugTimer.lap("persist", { reason: "no-pending" });
 		debugTimer.done({ outputBytes: 0, reason: "no-pending" });
 		return "";
@@ -171,7 +190,7 @@ export async function runPostToolUseHook(
 		engine.state.dynamicTargetFingerprints.set(target.cacheKey, target.fingerprint);
 	}
 	if (rules.length === 0) {
-		persistEngineState(engine, cachePath);
+		persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
 		debugTimer.lap("persist", { reason: "no-rules" });
 		debugTimer.done({ outputBytes: 0, reason: "no-rules" });
 		return "";
@@ -183,7 +202,7 @@ export async function runPostToolUseHook(
 	for (const rule of rules) {
 		engine.markDynamicInjected(rule);
 	}
-	persistEngineState(engine, cachePath);
+	persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
 	debugTimer.lap("persist", { reason: "emit" });
 	const output = formatAdditionalContextOutput("PostToolUse", block);
 	debugTimer.done({ outputBytes: Buffer.byteLength(output), reason: "emit" });
@@ -196,6 +215,7 @@ function runStaticInjection(
 	eventName: "SessionStart" | "UserPromptSubmit",
 	cachePath: string,
 	options: CodexRulesHookOptions,
+	completedPostCompactChannel?: "static",
 ): string {
 	const config = configFromEnvironment(options.env);
 	if (config.disabled || config.mode === "off" || config.mode === "dynamic") {
@@ -215,7 +235,7 @@ function runStaticInjection(
 		},
 	);
 	if (rules.length === 0) {
-		persistEngineState(engine, cachePath);
+		persistEngineState(engine, cachePath, completedPostCompactChannel);
 		return "";
 	}
 
@@ -223,7 +243,7 @@ function runStaticInjection(
 	for (const rule of rules) {
 		engine.markStaticInjected(rule);
 	}
-	persistEngineState(engine, cachePath);
+	persistEngineState(engine, cachePath, completedPostCompactChannel);
 	return formatAdditionalContextOutput(eventName, block);
 }
 

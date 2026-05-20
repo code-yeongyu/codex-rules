@@ -116,6 +116,22 @@ function postCompactInput(root: string): CodexPostCompactInput {
 	};
 }
 
+function userPromptSubmitInput(
+	root: string,
+	transcriptPath: string | null = null,
+): Parameters<typeof runUserPromptSubmitHook>[0] {
+	return {
+		session_id: "session-1",
+		turn_id: "turn-1",
+		transcript_path: transcriptPath,
+		cwd: root,
+		hook_event_name: "UserPromptSubmit",
+		model: "gpt-5.5",
+		permission_mode: "default",
+		prompt: "read src/app.ts",
+	};
+}
+
 function postToolUseInput(root: string, filePath: string): CodexPostToolUseInput {
 	return {
 		session_id: "session-1",
@@ -147,9 +163,14 @@ function parseHookOutput(output: string): {
 	};
 }
 
-function writeTranscriptWithContext(root: string, additionalContext: string): string {
+function writeTranscriptWithContext(root: string, ...additionalContexts: string[]): string {
 	const transcriptPath = path.join(root, "transcript.jsonl");
-	writeFileSync(transcriptPath, `${JSON.stringify({ hookSpecificOutput: { additionalContext } })}\n`);
+	writeFileSync(
+		transcriptPath,
+		`${additionalContexts
+			.map((additionalContext) => JSON.stringify({ hookSpecificOutput: { additionalContext } }))
+			.join("\n")}\n`,
+	);
 	return transcriptPath;
 }
 
@@ -414,6 +435,88 @@ describe("codex rules hooks", () => {
 		// then
 		expect(compactOutput).toBe("");
 		expect(parseHookOutput(output).hookSpecificOutput?.additionalContext).toContain("Prefer strict TypeScript");
+	});
+
+	it("#given compacted transcript #when static re-injects before dynamic #then dynamic still re-injects", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const staticOutput = await runSessionStartHook(sessionStartInput(root), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const dynamicOutput = await runPostToolUseHook(postToolUseInput(root, filePath), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const transcriptPath = writeTranscriptWithContext(
+			root,
+			parseHookOutput(staticOutput).hookSpecificOutput?.additionalContext ?? "",
+			parseHookOutput(dynamicOutput).hookSpecificOutput?.additionalContext ?? "",
+		);
+		await runPostCompactHook(
+			{ ...postCompactInput(root), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData },
+		);
+
+		// when
+		const staticReinjectOutput = await runUserPromptSubmitHook(userPromptSubmitInput(root, transcriptPath), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const dynamicReinjectOutput = await runPostToolUseHook(
+			{ ...postToolUseInput(root, filePath), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+
+		// then
+		expect(parseHookOutput(staticReinjectOutput).hookSpecificOutput?.additionalContext).toContain(
+			"Always wear safety goggles",
+		);
+		expect(parseHookOutput(dynamicReinjectOutput).hookSpecificOutput?.additionalContext).toContain(
+			"Prefer strict TypeScript",
+		);
+	});
+
+	it("#given compacted transcript #when dynamic re-injects before static #then static still re-injects", async () => {
+		// given
+		const { root, pluginData } = makeTempProject();
+		const filePath = path.join(root, "src", "app.ts");
+		const staticOutput = await runSessionStartHook(sessionStartInput(root), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const dynamicOutput = await runPostToolUseHook(postToolUseInput(root, filePath), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+		const transcriptPath = writeTranscriptWithContext(
+			root,
+			parseHookOutput(staticOutput).hookSpecificOutput?.additionalContext ?? "",
+			parseHookOutput(dynamicOutput).hookSpecificOutput?.additionalContext ?? "",
+		);
+		await runPostCompactHook(
+			{ ...postCompactInput(root), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData },
+		);
+
+		// when
+		const dynamicReinjectOutput = await runPostToolUseHook(
+			{ ...postToolUseInput(root, filePath), transcript_path: transcriptPath },
+			{ pluginDataRoot: pluginData, env: PROJECT_ONLY_ENV },
+		);
+		const staticReinjectOutput = await runUserPromptSubmitHook(userPromptSubmitInput(root, transcriptPath), {
+			pluginDataRoot: pluginData,
+			env: PROJECT_ONLY_ENV,
+		});
+
+		// then
+		expect(parseHookOutput(dynamicReinjectOutput).hookSpecificOutput?.additionalContext).toContain(
+			"Prefer strict TypeScript",
+		);
+		expect(parseHookOutput(staticReinjectOutput).hookSpecificOutput?.additionalContext).toContain(
+			"Always wear safety goggles",
+		);
 	});
 
 	it("#given legacy session cache #when PostToolUse hydrates state #then it accepts the old shape", async () => {

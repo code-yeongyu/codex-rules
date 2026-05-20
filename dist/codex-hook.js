@@ -2,7 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { configFromEnvironment } from "./config.js";
 import { createHookDebugTimer } from "./debug-log.js";
-import { clearSessionState, hydrateEngineState, markSessionCompacted, persistEngineState, sessionCachePath, wasSessionCompacted, } from "./persistent-cache.js";
+import { clearSessionState, hasPostCompactPending, hydrateEngineState, isPostCompactPending, markSessionCompacted, persistEngineState, sessionCachePath, } from "./persistent-cache.js";
 import { SOURCE_PRIORITY } from "./rules/constants.js";
 import { createEngine } from "./rules/engine.js";
 import { createRuleDiscoveryCache, findRuleCandidates } from "./rules/finder.js";
@@ -12,12 +12,15 @@ import { findProjectRoot } from "./rules/project-root.js";
 import { extractCodexToolPaths } from "./tool-paths.js";
 export async function runSessionStartHook(input, options = {}) {
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-    const wasCompacted = wasSessionCompacted(cachePath);
-    if (input.source !== "resume" && !wasCompacted) {
+    if (input.source === "clear") {
         clearSessionState(cachePath);
     }
-    const transcriptPath = input.source === "clear" || wasCompacted ? null : input.transcript_path;
-    return runStaticInjection(input.cwd, transcriptPath, "SessionStart", cachePath, options);
+    else if (input.source !== "resume" && !hasPostCompactPending(cachePath)) {
+        clearSessionState(cachePath);
+    }
+    const postCompactPending = input.source !== "clear" && isPostCompactPending(cachePath, "static");
+    const transcriptPath = input.source === "clear" || postCompactPending ? null : input.transcript_path;
+    return runStaticInjection(input.cwd, transcriptPath, "SessionStart", cachePath, options, postCompactPending ? "static" : undefined);
 }
 export async function runPostCompactHook(input, options = {}) {
     markSessionCompacted(sessionCachePath(input.session_id, options.pluginDataRoot));
@@ -25,8 +28,9 @@ export async function runPostCompactHook(input, options = {}) {
 }
 export async function runUserPromptSubmitHook(input, options = {}) {
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-    const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
-    return runStaticInjection(input.cwd, transcriptPath, "UserPromptSubmit", cachePath, options);
+    const postCompactPending = isPostCompactPending(cachePath, "static");
+    const transcriptPath = postCompactPending ? null : input.transcript_path;
+    return runStaticInjection(input.cwd, transcriptPath, "UserPromptSubmit", cachePath, options, postCompactPending ? "static" : undefined);
 }
 export async function runPostToolUseHook(input, options = {}) {
     const debugTimer = createHookDebugTimer("PostToolUse");
@@ -48,7 +52,8 @@ export async function runPostToolUseHook(input, options = {}) {
         return "";
     }
     const cachePath = sessionCachePath(input.session_id, options.pluginDataRoot);
-    const transcriptPath = wasSessionCompacted(cachePath) ? null : input.transcript_path;
+    const postCompactPending = isPostCompactPending(cachePath, "dynamic");
+    const transcriptPath = postCompactPending ? null : input.transcript_path;
     const engine = createRulesEngine(options);
     hydrateEngineState(engine, cachePath);
     debugTimer.lap("hydrate", {
@@ -61,7 +66,7 @@ export async function runPostToolUseHook(input, options = {}) {
     const pendingTargetFingerprints = dynamicTargetFingerprints.filter((target) => engine.state.dynamicTargetFingerprints.get(target.cacheKey) !== target.fingerprint);
     debugTimer.lap("pending", { pending: pendingTargetFingerprints.length });
     if (pendingTargetFingerprints.length === 0) {
-        persistEngineState(engine, cachePath);
+        persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
         debugTimer.lap("persist", { reason: "no-pending" });
         debugTimer.done({ outputBytes: 0, reason: "no-pending" });
         return "";
@@ -76,7 +81,7 @@ export async function runPostToolUseHook(input, options = {}) {
         engine.state.dynamicTargetFingerprints.set(target.cacheKey, target.fingerprint);
     }
     if (rules.length === 0) {
-        persistEngineState(engine, cachePath);
+        persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
         debugTimer.lap("persist", { reason: "no-rules" });
         debugTimer.done({ outputBytes: 0, reason: "no-rules" });
         return "";
@@ -87,13 +92,13 @@ export async function runPostToolUseHook(input, options = {}) {
     for (const rule of rules) {
         engine.markDynamicInjected(rule);
     }
-    persistEngineState(engine, cachePath);
+    persistEngineState(engine, cachePath, postCompactPending ? "dynamic" : undefined);
     debugTimer.lap("persist", { reason: "emit" });
     const output = formatAdditionalContextOutput("PostToolUse", block);
     debugTimer.done({ outputBytes: Buffer.byteLength(output), reason: "emit" });
     return output;
 }
-function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options) {
+function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options, completedPostCompactChannel) {
     const config = configFromEnvironment(options.env);
     if (config.disabled || config.mode === "off" || config.mode === "dynamic") {
         return "";
@@ -106,14 +111,14 @@ function runStaticInjection(cwd, transcriptPath, eventName, cachePath, options) 
         engine.markStaticInjected(rule);
     });
     if (rules.length === 0) {
-        persistEngineState(engine, cachePath);
+        persistEngineState(engine, cachePath, completedPostCompactChannel);
         return "";
     }
     const block = engine.formatStatic(rules);
     for (const rule of rules) {
         engine.markStaticInjected(rule);
     }
-    persistEngineState(engine, cachePath);
+    persistEngineState(engine, cachePath, completedPostCompactChannel);
     return formatAdditionalContextOutput(eventName, block);
 }
 function filterRulesAlreadyInTranscript(rules, transcriptPath, markInjected) {

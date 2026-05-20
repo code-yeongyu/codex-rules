@@ -16,25 +16,31 @@ export function hydrateEngineState(engine, cachePath) {
         engine.state.dynamicTargetFingerprints.set(targetKey, fingerprint);
     }
 }
-export function persistEngineState(engine, cachePath) {
+export function persistEngineState(engine, cachePath, completedPostCompactKind) {
+    const currentState = readSessionState(cachePath);
     const dynamicDedup = {};
     for (const [scope, keys] of engine.state.dynamicDedup.entries()) {
         dynamicDedup[scope] = [...keys];
     }
+    const postCompactPending = nextPostCompactPending(currentState, completedPostCompactKind);
     writeSessionState(cachePath, {
         staticDedup: [...engine.state.staticDedup],
         dynamicDedup,
         dynamicTargetFingerprints: Object.fromEntries(engine.state.dynamicTargetFingerprints.entries()),
+        ...(postCompactPending === undefined ? {} : { postCompactPending }),
     });
 }
 export function clearSessionState(cachePath) {
     rmSync(cachePath, { force: true });
 }
 export function markSessionCompacted(cachePath) {
-    writeSessionState(cachePath, { ...emptyState(), compacted: true });
+    writeSessionState(cachePath, { ...emptyState(), postCompactPending: { static: true, dynamic: true } });
 }
-export function wasSessionCompacted(cachePath) {
-    return readSessionState(cachePath).compacted === true;
+export function hasPostCompactPending(cachePath) {
+    return postCompactPendingKinds(readSessionState(cachePath)).size > 0;
+}
+export function isPostCompactPending(cachePath, kind) {
+    return postCompactPendingKinds(readSessionState(cachePath)).has(kind);
 }
 export function sessionCachePath(sessionId, pluginDataRoot) {
     const root = pluginDataRoot ?? process.env["PLUGIN_DATA"] ?? join(homedir(), ".codex", "codex-rules");
@@ -58,6 +64,29 @@ function writeSessionState(cachePath, state) {
 function emptyState() {
     return { staticDedup: [], dynamicDedup: {}, dynamicTargetFingerprints: {} };
 }
+function nextPostCompactPending(state, completedKind) {
+    const pendingKinds = postCompactPendingKinds(state);
+    if (completedKind !== undefined) {
+        pendingKinds.delete(completedKind);
+    }
+    if (pendingKinds.size === 0) {
+        return undefined;
+    }
+    return {
+        ...(pendingKinds.has("static") ? { static: true } : {}),
+        ...(pendingKinds.has("dynamic") ? { dynamic: true } : {}),
+    };
+}
+function postCompactPendingKinds(state) {
+    const pendingKinds = new Set();
+    if (state.compacted === true || state.postCompactPending?.static === true) {
+        pendingKinds.add("static");
+    }
+    if (state.compacted === true || state.postCompactPending?.dynamic === true) {
+        pendingKinds.add("dynamic");
+    }
+    return pendingKinds;
+}
 function safePathSegment(value) {
     return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120) || "unknown-session";
 }
@@ -68,13 +97,20 @@ function isSerializedSessionState(value) {
     const staticDedup = value["staticDedup"];
     const dynamicDedup = value["dynamicDedup"];
     const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
+    const postCompactPending = value["postCompactPending"];
     const compacted = value["compacted"];
     return (staticDedup.every((item) => typeof item === "string") &&
         Object.values(dynamicDedup).every((item) => Array.isArray(item) && item.every((nestedItem) => typeof nestedItem === "string")) &&
         (dynamicTargetFingerprints === undefined ||
             (isRecord(dynamicTargetFingerprints) &&
                 Object.entries(dynamicTargetFingerprints).every(([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string"))) &&
+        (postCompactPending === undefined || isPostCompactPendingState(postCompactPending)) &&
         (compacted === undefined || typeof compacted === "boolean"));
+}
+function isPostCompactPendingState(value) {
+    return (isRecord(value) &&
+        (value["static"] === undefined || typeof value["static"] === "boolean") &&
+        (value["dynamic"] === undefined || typeof value["dynamic"] === "boolean"));
 }
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);

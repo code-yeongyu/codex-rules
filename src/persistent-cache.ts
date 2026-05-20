@@ -4,10 +4,18 @@ import { dirname, join } from "node:path";
 
 import type { Engine } from "./rules/engine.js";
 
+export type PostCompactPendingKind = "static" | "dynamic";
+
+interface PostCompactPendingState {
+	static?: boolean;
+	dynamic?: boolean;
+}
+
 interface SerializedSessionState {
 	staticDedup: string[];
 	dynamicDedup: Record<string, string[]>;
 	dynamicTargetFingerprints?: Record<string, string>;
+	postCompactPending?: PostCompactPendingState;
 	compacted?: boolean;
 }
 
@@ -28,16 +36,23 @@ export function hydrateEngineState(engine: Engine, cachePath: string): void {
 	}
 }
 
-export function persistEngineState(engine: Engine, cachePath: string): void {
+export function persistEngineState(
+	engine: Engine,
+	cachePath: string,
+	completedPostCompactKind?: PostCompactPendingKind,
+): void {
+	const currentState = readSessionState(cachePath);
 	const dynamicDedup: Record<string, string[]> = {};
 	for (const [scope, keys] of engine.state.dynamicDedup.entries()) {
 		dynamicDedup[scope] = [...keys];
 	}
 
+	const postCompactPending = nextPostCompactPending(currentState, completedPostCompactKind);
 	writeSessionState(cachePath, {
 		staticDedup: [...engine.state.staticDedup],
 		dynamicDedup,
 		dynamicTargetFingerprints: Object.fromEntries(engine.state.dynamicTargetFingerprints.entries()),
+		...(postCompactPending === undefined ? {} : { postCompactPending }),
 	});
 }
 
@@ -46,11 +61,15 @@ export function clearSessionState(cachePath: string): void {
 }
 
 export function markSessionCompacted(cachePath: string): void {
-	writeSessionState(cachePath, { ...emptyState(), compacted: true });
+	writeSessionState(cachePath, { ...emptyState(), postCompactPending: { static: true, dynamic: true } });
 }
 
-export function wasSessionCompacted(cachePath: string): boolean {
-	return readSessionState(cachePath).compacted === true;
+export function hasPostCompactPending(cachePath: string): boolean {
+	return postCompactPendingKinds(readSessionState(cachePath)).size > 0;
+}
+
+export function isPostCompactPending(cachePath: string, kind: PostCompactPendingKind): boolean {
+	return postCompactPendingKinds(readSessionState(cachePath)).has(kind);
 }
 
 export function sessionCachePath(sessionId: string, pluginDataRoot: string | undefined): string {
@@ -77,6 +96,36 @@ function emptyState(): SerializedSessionState {
 	return { staticDedup: [], dynamicDedup: {}, dynamicTargetFingerprints: {} };
 }
 
+function nextPostCompactPending(
+	state: SerializedSessionState,
+	completedKind: PostCompactPendingKind | undefined,
+): PostCompactPendingState | undefined {
+	const pendingKinds = postCompactPendingKinds(state);
+	if (completedKind !== undefined) {
+		pendingKinds.delete(completedKind);
+	}
+
+	if (pendingKinds.size === 0) {
+		return undefined;
+	}
+
+	return {
+		...(pendingKinds.has("static") ? { static: true } : {}),
+		...(pendingKinds.has("dynamic") ? { dynamic: true } : {}),
+	};
+}
+
+function postCompactPendingKinds(state: SerializedSessionState): Set<PostCompactPendingKind> {
+	const pendingKinds = new Set<PostCompactPendingKind>();
+	if (state.compacted === true || state.postCompactPending?.static === true) {
+		pendingKinds.add("static");
+	}
+	if (state.compacted === true || state.postCompactPending?.dynamic === true) {
+		pendingKinds.add("dynamic");
+	}
+	return pendingKinds;
+}
+
 function safePathSegment(value: string): string {
 	return value.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120) || "unknown-session";
 }
@@ -88,6 +137,7 @@ function isSerializedSessionState(value: unknown): value is SerializedSessionSta
 	const staticDedup = value["staticDedup"];
 	const dynamicDedup = value["dynamicDedup"];
 	const dynamicTargetFingerprints = value["dynamicTargetFingerprints"];
+	const postCompactPending = value["postCompactPending"];
 	const compacted = value["compacted"];
 	return (
 		staticDedup.every((item) => typeof item === "string") &&
@@ -99,7 +149,16 @@ function isSerializedSessionState(value: unknown): value is SerializedSessionSta
 				Object.entries(dynamicTargetFingerprints).every(
 					([targetKey, fingerprint]) => typeof targetKey === "string" && typeof fingerprint === "string",
 				))) &&
+		(postCompactPending === undefined || isPostCompactPendingState(postCompactPending)) &&
 		(compacted === undefined || typeof compacted === "boolean")
+	);
+}
+
+function isPostCompactPendingState(value: unknown): value is PostCompactPendingState {
+	return (
+		isRecord(value) &&
+		(value["static"] === undefined || typeof value["static"] === "boolean") &&
+		(value["dynamic"] === undefined || typeof value["dynamic"] === "boolean")
 	);
 }
 
