@@ -46,7 +46,7 @@
 		"check": "tsc --noEmit && biome check . && npm run build"
 	},
 	"dependencies": {
-		"picomatch": "^4.0.3"
+		"picomatch": "^4.0.7"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.5",
