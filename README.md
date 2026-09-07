@@ -40,30 +40,66 @@ alwaysApply: false
 Prefer strict TypeScript and keep runtime imports ESM-compatible.
 ```
 
-## Install Locally
+## Install from source
 
-From the marketplace workspace:
+This repository is a Codex plugin package, not a Codex plugin marketplace.
+Do **not** run `codex plugin marketplace add code-yeongyu/codex-rules`:
+the repository does not contain a marketplace manifest, so Codex rejects it.
+
+Codex discovers a personal marketplace automatically from
+`~/.agents/plugins/marketplace.json`. Clone this repository into the personal
+plugin directory:
 
 ```bash
-codex plugin marketplace add /Users/yeongyu/local-workspaces/codex-plugins
-node /Users/yeongyu/local-workspaces/codex-plugins/scripts/install-local.mjs /Users/yeongyu/local-workspaces/codex-plugins
+mkdir -p ~/plugins ~/.agents/plugins
+git clone https://github.com/code-yeongyu/codex-rules.git ~/plugins/codex-rules
 ```
 
-The local installer builds the plugin and copies a clean cache entry to:
+If `~/.agents/plugins/marketplace.json` does not already exist, create it
+with this content:
 
-```text
-~/.codex/plugins/cache/code-yeongyu-codex-plugins/codex-rules/0.1.0
+```json
+{
+  "name": "personal",
+  "interface": {
+    "displayName": "Personal"
+  },
+  "plugins": [
+    {
+      "name": "codex-rules",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-rules"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
 ```
 
-It also enables:
+If the file already exists, retain its `name`, `interface`, and existing
+plugin entries; append only the `codex-rules` object above to its `plugins`
+array.
+
+Install the plugin from the implicitly discovered `personal` marketplace:
+
+```bash
+codex plugin add codex-rules@personal
+codex plugin list
+```
+
+Start a new Codex session after installation so the `SessionStart` hook can
+load the project rules. If Codex reports that plugins or plugin hooks are
+disabled, enable them in `~/.codex/config.toml` and restart Codex:
 
 ```toml
 [features]
 plugins = true
 plugin_hooks = true
-
-[plugins."codex-rules@code-yeongyu-codex-plugins"]
-enabled = true
 ```
 
 ## Configuration
