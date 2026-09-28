@@ -11,7 +11,7 @@ It ports the `pi-rules` rule injector to Codex:
 
 `PostToolUse` output is context-only: it emits `hookSpecificOutput.additionalContext` and does not rewrite tool output.
 
-The runtime has no npm production dependencies, so a clean Codex marketplace copy can run without a follow-up `npm install`.
+The distributed CLI bundles its runtime dependencies, so a clean Codex marketplace copy can run without a follow-up `npm install`.
 
 ## Rule Sources
 

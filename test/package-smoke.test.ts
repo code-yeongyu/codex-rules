@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 type PackageJson = {
@@ -100,6 +103,76 @@ describe("plugin package metadata", () => {
 				"Bash",
 			].some((toolName) => postToolUseMatcherRegex.test(toolName)),
 		).toBe(false);
+	});
+});
+
+describe("standalone plugin hooks", () => {
+	it.each([
+		["session-start", "SessionStart", "Follow project conventions."],
+		["user-prompt-submit", "UserPromptSubmit", "Follow project conventions."],
+		["post-tool-use", "PostToolUse", "Use strict TypeScript."],
+	])("#given no node_modules #when %s runs #then it injects matching rules", (command, event, rule) => {
+		// given: copy the distributed files outside the checkout's dependency tree.
+		const root = mkdtempSync(join(tmpdir(), "codex-rules-standalone-"));
+		try {
+			const pluginRoot = join(root, "plugin");
+			const projectRoot = join(root, "project");
+			cpSync("dist", join(pluginRoot, "dist"), { recursive: true });
+			cpSync("package.json", join(pluginRoot, "package.json"));
+			mkdirSync(join(projectRoot, ".omo", "rules"), { recursive: true });
+			mkdirSync(join(projectRoot, "src"));
+			writeFileSync(join(projectRoot, "package.json"), '{"name":"fixture"}');
+			writeFileSync(join(projectRoot, "AGENTS.md"), "Follow project conventions.");
+			writeFileSync(join(projectRoot, "src", "app.ts"), "export const app = true;\n");
+			writeFileSync(
+				join(projectRoot, ".omo", "rules", "typescript.md"),
+				'---\nglobs: ["src/**/*.{ts,tsx}"]\n---\nUse strict TypeScript.',
+			);
+			const payload = {
+				session_id: "standalone",
+				turn_id: "turn-1",
+				transcript_path: null,
+				cwd: projectRoot,
+				hook_event_name: event,
+				model: "test-model",
+				permission_mode: "default",
+				source: "startup",
+				prompt: "Update src/app.ts",
+				tool_name: "apply_patch",
+				tool_input: {
+					patch: "*** Begin Patch\n*** Update File: src/app.ts\n@@\n-export const app = true;\n+export const app = false;\n*** End Patch",
+				},
+				tool_response: "Success. Updated src/app.ts",
+				tool_use_id: "call-1",
+			};
+
+			// when
+			const result = spawnSync(process.execPath, [join(pluginRoot, "dist", "cli.js"), "hook", command], {
+				cwd: projectRoot,
+				input: JSON.stringify(payload),
+				encoding: "utf8",
+				env: {
+					...process.env,
+					NODE_PATH: "",
+					CODEX_RULES_DISABLED: "0",
+					CODEX_RULES_MODE: "both",
+					CODEX_RULES_ENABLED_SOURCES: "AGENTS.md,.omo/rules",
+					PLUGIN_DATA: join(root, "data"),
+				},
+				timeout: 10_000,
+			});
+
+			// then
+			expect(result.error).toBeUndefined();
+			expect(result.stderr).toBe("");
+			expect(result.status).toBe(0);
+			const output: unknown = JSON.parse(result.stdout);
+			expect(output).toMatchObject({
+				hookSpecificOutput: { hookEventName: event, additionalContext: expect.stringContaining(rule) },
+			});
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

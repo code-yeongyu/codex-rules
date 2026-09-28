@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Bundle the hook CLI with picomatch so Git-backed marketplace installs work without `node_modules`.
 - Restrict the default `PostToolUse` hook matcher to Codex's canonical `apply_patch` tool name.
 - Add opt-in `NODE_DEBUG=codex-rules` phase timing logs for `PostToolUse` debugging.
 - Harden dynamic hook coverage for additional-context JSON output, disabled/static modes, failed tool responses, and duplicate suppression.

@@ -36,7 +36,7 @@
 		"CHANGELOG.md"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
+		"build": "tsc -p tsconfig.build.json && node scripts/bundle-cli.mjs",
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"bench": "npm run build --silent && node scripts/bench-codex-rules.mjs",
@@ -52,6 +52,7 @@
 		"@biomejs/biome": "2.5.5",
 		"@types/node": "^26.1.1",
 		"@types/picomatch": "^4.0.0",
+		"esbuild": "0.28.2",
 		"typescript": "7.0.2",
 		"vitest": "^4.1.10"
 	},
