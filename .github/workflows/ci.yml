@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Smoke-test committed plugin without runtime dependencies
+        run: npm test -- test/package-smoke.test.ts
+
       - name: Check
         run: npm run check
 

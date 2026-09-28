@@ -13,3 +13,4 @@ here under MIT for distribution as a Codex plugin. See LICENSE for terms.
 
 picomatch is by Jon Schlinkert and contributors (https://github.com/micromatch/picomatch).
 Distributed under the MIT License.
+The bundled CLI includes picomatch; its license is in dist/picomatch.LICENSE.
